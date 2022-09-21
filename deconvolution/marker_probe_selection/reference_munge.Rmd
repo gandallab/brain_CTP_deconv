@@ -1,0 +1,149 @@
+---
+title: "Single-cell methylation reference munge"
+author: "Chloe Yap"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+---
+
+**To run**
+
+```{bash, eval = FALSE}
+
+module load pandoc
+cd ~/shared-gandalm/brain_CTP/Scripts/methylation/qc/reference_munge/reference_munge
+
+```
+
+In R:
+
+```{r, eval = FALSE}
+setwd("~/shared-gandalm/brain_CTP/Scripts/methylation/qc/reference_munge/reference_munge")
+rmarkdown::render("reference_munge.Rmd", "html_document")
+```
+
+# Set-up
+
+## Arguments
+
+```{r}
+
+cgn_ilmn450kepic_aggto100bp_c10_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/cgn_ilmn450kepic_aggto100bp_c10.dir"
+
+celltype_n_v2_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/celltype_n_v2"
+
+out_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020"
+
+library(data.table)
+library(DT)
+library(GenomicRanges)
+library(tidyverse)
+library(scales)
+library(ggpubr)
+
+```
+
+## Read-in data
+
+### Window +/-50bp around ilmn450K/EPIC probes with post-agg coverage threshold
+
+```{r}
+
+print("Read in data")
+
+print("... celltype_n")
+celltype_n_v2 <- fread(celltype_n_v2_dir, header = F)
+celltype_n_v2 <- celltype_n_v2[order(tolower(celltype_n_v2$V1))]
+
+print("... cgn_ilmn450kepic_aggto100bp.dir")
+# Read in DMR files
+cgn_ilmn450kepic_aggto100bp_c10.dir <- fread(cgn_ilmn450kepic_aggto100bp_c10_dir, header = F)
+cgn_ilmn450kepic_aggto100bp_c10.dir <- cgn_ilmn450kepic_aggto100bp_c10.dir[order(tolower(cgn_ilmn450kepic_aggto100bp_c10.dir$V1)),]
+cgn_ilmn450kepic_aggto100bp_c10.ls <- lapply(1:nrow(cgn_ilmn450kepic_aggto100bp_c10.dir), function(x) 
+	data.frame(readRDS(cgn_ilmn450kepic_aggto100bp_c10.dir$V1[x])) %>% dplyr::select(c("Probe", "methyl_C", "methyl_unmethyl_C", "beta")))
+names(cgn_ilmn450kepic_aggto100bp_c10.ls) <- celltype_n_v2$V1
+
+```
+
+# Munge reference matrix with ilmn450K/EPIC probe subset +/-50bp window (latest iteration)
+
+## Choose which
+
+```{r}
+
+cgn_ilmn450kepic_aggto100bp.ls <- cgn_ilmn450kepic_aggto100bp_c10.ls  
+
+```
+
+## Beta
+
+```{r}
+
+print("Cast long to wide format")
+
+# Add celltype column
+#cgn_ilmn450k_beta.long <- rbindlist(cgn_ilmn450k.ls, idcol = TRUE)
+cgn_ilmn450kepic_aggto100bp.ls.long <- rbindlist(cgn_ilmn450kepic_aggto100bp.ls, idcol = TRUE)
+colnames(cgn_ilmn450kepic_aggto100bp.ls.long)[1] <- "celltype"
+
+cgn_ilmn450kepic_aggto100bp.ma <- dcast(cgn_ilmn450kepic_aggto100bp.ls.long, Probe ~ celltype, value.var = "beta")
+
+```
+
+## methyl_C
+
+```{r}
+
+print("Cast long to wide format")
+
+# Add celltype column
+cgn_ilmn450kepic_aggto100bp_methylC.long <- rbindlist(cgn_ilmn450kepic_aggto100bp.ls, idcol = TRUE)
+colnames(cgn_ilmn450kepic_aggto100bp_methylC.long)[1] <- "celltype"
+
+cgn_ilmn450kepic_aggto100bp_methylC.ma <- dcast(cgn_ilmn450kepic_aggto100bp_methylC.long, Probe ~ celltype, value.var = "methyl_C")
+
+```
+
+## methyl_unmethyl_C
+
+```{r}
+
+print("Cast long to wide format")
+
+# Add celltype column
+cgn_ilmn450kepic_aggto100bp_methylunmethylC.long <- rbindlist(cgn_ilmn450kepic_aggto100bp.ls, idcol = TRUE)
+colnames(cgn_ilmn450kepic_aggto100bp_methylunmethylC.long)[1] <- "celltype"
+
+cgn_ilmn450kepic_aggto100bp_methylunmethylC.ma <- dcast(cgn_ilmn450kepic_aggto100bp_methylunmethylC.long, Probe ~ celltype, value.var = "methyl_unmethyl_C")
+
+```
+
+## Check NAs/missingness
+
+**Check per-celltype coverage**
+
+```{r}
+
+print("Box and whiskers plot of coverage by cell-type")
+# Try on a log scale for the y-axis
+ggplot(cgn_ilmn450kepic_aggto100bp_methylunmethylC.long, aes(x=celltype, y=methyl_unmethyl_C, colour = celltype)) + geom_boxplot() + scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x))) + theme(legend.position = "none", axis.text.x = element_text(angle = 90, hjust = 1))
+
+cgn_ilmn450kepic_aggto100bp_methylunmethylC.long %>% group_by(celltype) %>% summarise(mean = mean(methyl_unmethyl_C), median = median(methyl_unmethyl_C)) %>% print(n=Inf)
+
+```
+
+## Write outputs
+
+```{r}
+
+saveRDS(cgn_ilmn450kepic_aggto100bp.ls, paste(out_dir, "/cgn_ilmn450kepic_aggto100_c10.ls.rds", sep = ""))
+
+fwrite(cgn_ilmn450kepic_aggto100bp.ma, paste(out_dir, "/ilmn450kepic_aggto100bp_celltype_c10_beta.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+fwrite(cgn_ilmn450kepic_aggto100bp_methylC.ma, paste(out_dir, "/ilmn450kepic_aggto100bp_celltype_c10_M.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+fwrite(cgn_ilmn450kepic_aggto100bp_methylunmethylC.ma, paste(out_dir, "/ilmn450kepic_aggto100bp_celltype_c10_MU.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")  
+
+```
