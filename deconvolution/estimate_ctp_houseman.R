@@ -7,44 +7,16 @@
 #------------------------------------------------------------------------------
 # FUNCTIONS: READ IN FIRST
 
-estimateLC = function(meth,coefs,constrained=TRUE){
-    
-    J = ncol(meth)
-    n_celltypes = ncol(coefs)
+# Houseman 2012 deconvolution implemented in minfi (Aryee et al. 2014)
+# minfi::projectCellType within estimateCellCounts.R 
+# (https://rdrr.io/bioc/minfi/src/R/estimateCellCounts.R)
+# this function preferred here as requiring just methylation beta matrix 
+# is more flexible
 
-    markers = match(rownames(coefs),rownames(meth))
-    print(paste("Number of markers overlapping:", length(which(!is.na(markers))), " / total markers:", length(markers), sep = ""))
-    EST = sapply(1:J,function(j){
-        tmp = meth[markers,j]
-        i = !is.na(tmp)
+# Inputs:
+# Y: bulk methylation beta matrix
+# coefCellType: reference, matrix of m rows (CpG probes) x n columns (cell-types)
 
-        if(constrained == FALSE){
-            return(
-                quadprog::solve.QP(
-                 t(coefs[i,]) %*% coefs[i,]
-                ,t(coefs[i,]) %*% tmp[i]
-                ,diag(n_celltypes)
-                ,rep(0,n_celltypes)
-            )$sol)
-        }else{
-            return(
-                quadprog::solve.QP(
-                 t(coefs[i,]) %*% coefs[i,]
-                ,t(coefs[i,]) %*% tmp[i]
-                ,cbind(1,diag(n_celltypes))
-                ,c(1,rep(0,n_celltypes))
-                ,meq=1
-            )$sol)
-        }
-        })
-    EST = t(EST)
-    colnames(EST) = colnames(coefs)
-    EST = data.frame(IID = colnames(meth), EST)
-
-    return(EST)
-}
-
-# From minfi: https://rdrr.io/bioc/minfi/src/R/estimateCellCounts.R
 projectCellType <- function(Y, coefCellType, contrastCellType = NULL,
                             nonnegative = TRUE, lessThanOne = TRUE) {
     if (is.null(contrastCellType)) {
@@ -96,6 +68,13 @@ projectCellType <- function(Y, coefCellType, contrastCellType = NULL,
 }
 
 # Seiler-Vellame et al. 2022 biorXiv https://www.biorxiv.org/content/10.1101/2022.06.15.496235v1
+
+# Inputs:
+# applyIndex: getErrorPerSample() implemented within sapply loop to iterate through each matrix row
+# predictedIN: output cell-type proportions
+# coefDataIN: reference cell-type profile matrix
+# betasBulkIN: bulk methylation matrix
+
 getErrorPerSample = function(applyIndex,
                                  predictedIN = counts,
                                  coefDataIN = coefs,
@@ -129,28 +108,20 @@ getErrorPerSample = function(applyIndex,
 
 library(minfi)
 library(quadprog)
-library(RefFreeEWAS)
-library(TOAST)
 library(csSAM)
 library(data.table)
 library(tidyverse)
 library(ggplot2)
 library(forcats)
 library(dplyr)
-library(viridis)
-#library(ggpubr)
-#library(gridExtra)
 
 #------------------------------------------------------------------------------
-# Read in bulk data (DNA methylation beta matrix, batch corrected)
+# Bulk data directory (DNA methylation beta matrix, batch corrected)
 #------------------------------------------------------------------------------
 
 # Jaffe
 data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/Jaffe2018/analysis"
-filen <- "Jaffe2018_age18_aut_mask_t"
 filen <- "Jaffe2018_age0_aut_mask_t"
-#filen <- "Jaffe2018_age18_ComBatplate_neg0_aut_mask_t"
-#filen <- "Jaffe2018_age0_ComBatplate_neg0_aut_mask_t"
 meth_dir <- paste(data_dir, "/", filen, ".txt", sep = "")
 
 # ASD brain
@@ -164,23 +135,26 @@ filen <- "ROSMAP_aut_mask_t"
 meth_dir <- paste(data_dir, "/", filen, ".txt", sep = "")
 
 #------------------------------------------------------------------------------
-# Read in reference data
+# Reference data directory
 #------------------------------------------------------------------------------
 
-# Coefficients from different algorithms
+# Coefficients from sequencing data
 coefs_seq_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds"
 
 #------------------------------------------------------------------------------
-# QC of bulk + reference
+# Read-in + QC of bulk + reference
 #------------------------------------------------------------------------------
 
-# Methylation data
+# Methylation data: read-in + format
 meth.tmp <- fread(meth_dir)
 meth <- as.matrix(meth.tmp[,2:ncol(meth.tmp)])
 rownames(meth) <- data.frame(meth.tmp)[,1]
 meth <- meth[order(rownames(meth)),]
 
 # Reference probes, order, and overlap with methylation matrix
+# Formatted as a list here, as it gives flexibility to deconvolve 
+# 1 methylation beta matrix with multiple different reference
+# panels for comparison
 coefs_seq <- readRDS(coefs_seq_dir)
 coefs_seq.ls <- list(coefs_seq)
 coefs_seq.ls <- lapply(coefs_seq.ls, function(x) x[order(rownames(x)),])

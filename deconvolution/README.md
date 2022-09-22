@@ -36,15 +36,17 @@ This directory contains scripts used to perform brain_CTP deconvolution as descr
 
 3.  `find_dmr_extremes.R` : .R script identifying marker probes
 
-    1.  Aggregate multiple Excitatory cell sub-types and Inhibitory cell sub-types into Exc and Inh, as this gives better coverage
+    1.  Aggregate multiple Excitatory cell sub-types into Exc, and Inhibitory cell sub-types into Inh, as this gives better CpG coverage (within some cell sub-types, the sequencing is somewhat sparse)
 
-    2.  Identify marker CpG probes on the basis of being
+    2.  Calculate %methylation at each CpG site: M/(M+U)
+
+    3.  Identify marker CpG probes on the basis of being
 
         1.  \>=60% methylated in only 1 cell-type and \<= 40% methylated in all other cell-types (ie. a marker probe that is up-methylated)
 
         2.  \<=40% methylated in only 1 cell-type and \>=60% methylated in all other cell-types (ie. a marker probe that is down-methylated)
 
-    3.  Format and output as `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+    4.  Format and output as `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
 
 ## Data
 
