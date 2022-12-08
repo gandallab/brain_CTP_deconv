@@ -1,0 +1,653 @@
+---
+title: "brain CTP differences (local plots)"
+author: "Chloe Yap"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Set-up
+
+```{r}
+
+library(tidyverse)
+library(ggstatsplot)
+library(ggrepel)
+library(wesanderson)
+library(DT)
+
+```
+
+## Read-in
+
+```{r}
+
+ctp.clr.1e3 <- read.delim("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/ctp_clr1e-3_aggregated_scz_asd_azd.txt", header = T, as.is = T)
+asd_exclude <- read.delim("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/asd_exclude_studybalance.id", header = F, as.is = T)
+scz_exclude <- read.delim("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/scz_exclude_studybalance.id", header = F, as.is = T)
+colnames(asd_exclude) <- c("FID", "IID")
+
+```
+
+# Linear models for individual cell-type differences
+
+## Sub-types
+
+### clr, no adjustment for oligodendrocytes
+
+#### ASDbrain
+
+```{r, eval = FALSE}
+
+asd_exc_nocov <- lm(Exc ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_inh_nocov <- lm(Inh ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_astro_nocov <- lm(NonN_Astro_FGF3R ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_endo_nocov <-lm(NonN_Endo ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_micro_nocov <-lm(NonN_Micro ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_oligo_nocov <- lm(NonN_Oligo_MBP ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_opc_nocov <- lm(NonN_OPC ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+
+asd_exc_cov <- lm(Exc ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_inh_cov <- lm(Inh ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_astro_cov <- lm(NonN_Astro_FGF3R ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_endo_cov <- lm(NonN_Endo ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_micro_cov <- lm(NonN_Micro ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_oligo_cov <- lm(NonN_Oligo_MBP ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+asd_opc_cov <- lm(NonN_OPC ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID))
+
+```
+
+#### LIBD
+
+```{r, eval = FALSE}
+
+scz_exc_nocov <- lm(Exc ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_inh_nocov <- lm(Inh ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_astro_nocov <- lm(NonN_Astro_FGF3R ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_endo_nocov <- lm(NonN_Endo ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_micro_nocov <- lm(NonN_Micro ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_oligo_nocov <- lm(NonN_Oligo_MBP ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_opc_nocov <- lm(NonN_OPC ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+
+scz_exc_cov <- lm(Exc ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_inh_cov <- lm(Inh ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_astro_cov <- lm(NonN_Astro_FGF3R ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_endo_cov <- lm(NonN_Endo ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_micro_cov <- lm(NonN_Micro ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_oligo_cov <- lm(NonN_Oligo_MBP ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+scz_opc_cov <- lm(NonN_OPC ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD"))
+
+```
+
+#### ROSMAP
+
+```{r, eval = FALSE}
+
+azd_exc_nocov <- lm(Exc ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_inh_nocov <- lm(Inh ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_astro_nocov <- lm(NonN_Astro_FGF3R ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_endo_nocov <- lm(NonN_Endo ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_micro_nocov <- lm(NonN_Micro ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_oligo_nocov <- lm(NonN_Oligo_MBP ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_opc_nocov <- lm(NonN_OPC ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+
+azd_exc_cov <- lm(Exc ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_inh_cov <- lm(Inh ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_astro_cov <- lm(NonN_Astro_FGF3R ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_endo_cov <- lm(NonN_Endo ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_micro_cov <- lm(NonN_Micro ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_oligo_cov <- lm(NonN_Oligo_MBP ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+azd_opc_cov <- lm(NonN_OPC ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP"))
+
+```
+
+# ggstatsplot for significant hits
+
+- ASD: none
+- SCZ: Inh, Oligo
+- AZD: Astro
+
+```{r, eval = FALSE}
+
+lm_ctp_sig <- ggstatsplot::combine_plots(
+  plotgrid.args = list(nrow = 1, ncol = 3),
+  plotlist = list(
+  # SCZ: Inh
+  ggstatsplot::ggcoefstats(scz_inh_cov,
+  title = "Inhibitory neurons (clr) ~ SCZ",
+  ylab = NULL, stats.label.args = c(nudge_y = 0.3), exclude.intercept = TRUE) + theme(text = element_text(size = 15)),
+  # SCZ: Oligo
+  ggstatsplot::ggcoefstats(scz_oligo_cov,
+  title = "Oligodendrocytes (clr) ~ SCZ", 
+  ylab = NULL, stats.label.args = c(nudge_y = 0.3), exclude.intercept = TRUE) + theme(text = element_text(size = 15)),
+  # AZD: Astro
+  ggstatsplot::ggcoefstats(azd_astro_cov,
+  title = "Astrocytes (clr) ~ AZD",
+  ylab = NULL, stats.label.args = c(nudge_y = 0.3), exclude.intercept = TRUE) + theme(text = element_text(size = 15))))
+
+lm_ctp_sig
+ggsave(paste("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_sig.png"), lm_ctp_sig, height = 6, width = 14)
+ggsave(paste("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_sig.svg"), lm_ctp_sig, height = 6, width = 14)
+
+```
+
+# Plot extracting diagnosis effect
+
+## All in one go (multivariate)
+
+```{r}
+
+# Take CTL as reference
+ctp.clr.1e3$dx <- relevel(as.factor(ctp.clr.1e3$dx), ref = "CTL")
+
+# No covariates
+tidy_df_nocov_asd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASDbrain")
+
+tidy_df_nocov_scz <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude[,1])), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "LIBD")
+
+tidy_df_nocov_azd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")  %>% mutate(study = "ROSMAP")
+
+tidy_df_nocov_all <- rbind(tidy_df_nocov_asd, tidy_df_nocov_scz, tidy_df_nocov_azd)
+
+# With covariates: including age2
+tidy_df_cov_asd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID) %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASDbrain (ASD)")
+
+tidy_df_cov_scz <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude[,1]) %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "LIBD (SCZ)")
+
+tidy_df_cov_azd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP") %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ROSMAP (AZD)")
+
+tidy_df_cov_all_sex <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "sex_mega-analysis")
+
+tidy_df_cov_all_age2 <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age2 + sex + batch, data = ctp.clr.1e3 %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "age2_mega-analysis")
+
+# With covariates: excluding age2
+tidy_df_cov_asd_noage2 <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID) %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASDbrain (ASD)")
+
+tidy_df_cov_scz_noage2 <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude[,1]) %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "LIBD (SCZ)")
+
+tidy_df_cov_azd_noage2 <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP") %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ROSMAP (AZD)")
+
+tidy_df_cov_all_age <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + sex + batch, data = ctp.clr.1e3 %>% mutate(age2 = age^2)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "age_mega-analysis")
+
+tidy_df_cov_all <- rbind(tidy_df_cov_asd, tidy_df_cov_scz, tidy_df_cov_azd)
+tidy_df_cov_all_noage2 <- rbind(tidy_df_cov_asd_noage2, tidy_df_cov_scz_noage2, tidy_df_cov_azd_noage2)
+tidy_df_cov_all_mega <- rbind(tidy_df_cov_all_sex, tidy_df_cov_all_age, tidy_df_cov_all_age2)
+
+```
+
+### Coefficients: covariates
+
+```{r}
+
+datatable(tidy_df_cov_all)
+datatable(tidy_df_cov_all_noage2)
+datatable(tidy_df_cov_all_mega)
+
+```
+
+### Coefficients: no covariates
+
+```{r}
+
+datatable(tidy_df_nocov_all)
+
+```
+
+## Extract diagnosis effect
+
+### Adjusted for covariates
+
+```{r}
+
+tidy_df_cov_all_dx <- tidy_df_cov_all %>% filter(grepl("dx", term))
+
+# Add label
+tidy_df_cov_all_dx$lab <- ifelse(tidy_df_cov_all_dx$p.value < 0.06, paste(
+  "b=", ifelse(abs(tidy_df_cov_all_dx$estimate) < 0.001, formatC(tidy_df_cov_all_dx$estimate, format = "e", digits = 2), round(tidy_df_cov_all_dx$estimate, 3)), ", ", 
+  "p=", ifelse(tidy_df_cov_all_dx$p.value < 0.001, formatC(tidy_df_cov_all_dx$p.value, format = "e", digits = 2), round(tidy_df_cov_all_dx$p.value, 3)), ", ", 
+  "df=", tidy_df_cov_all_dx$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_all_dx$celltype <- tidy_df_cov_all_dx$response
+#tidy_df_cov_all_dx$celltype <- gsub("_FGF3R", "", tidy_df_cov_all_dx$celltype)
+#tidy_df_cov_all_dx$celltype <- gsub("_TYROBP", "", tidy_df_cov_all_dx$celltype)
+#tidy_df_cov_all_dx$celltype <- gsub("_MBP", "", tidy_df_cov_all_dx$celltype)
+
+# Change diagnosis name
+tidy_df_cov_all_dx$dx <- gsub("dx", "", tidy_df_cov_all_dx$term)
+tidy_df_cov_all_dx$variable <- "diagnosis"
+
+# Specific order
+tidy_df_cov_all_dx$MatchDx <- match(tidy_df_cov_all_dx$dx, c("CTL", "ASD", "SCZ", "AZD"))
+tidy_df_cov_all_dx$MatchCell <- match(tidy_df_cov_all_dx$celltype, unique(tidy_df_cov_all_dx$celltype))
+tidy_df_cov_all_dx$MatchTerm <- match(tidy_df_cov_all_dx$term, unique(tidy_df_cov_all_dx$term))
+tidy_df_cov_all_dx$MatchStudy <- match(tidy_df_cov_all_dx$study, c("ASDbrain (ASD)", "LIBD (SCZ)", "ROSMAP (AZD)"))
+
+# Plot
+tidy_df_cov_all_dx %>%
+  mutate(dx = fct_reorder(dx, MatchDx)) %>% 
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(study = fct_reorder(study, MatchStudy)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(variable ~ study)
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_dx_cov_all.png", height = 3.5, width = 7)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_dx_cov_all.svg", height = 3.5, width = 7)
+
+```
+
+### Not adjusted for covariates
+
+```{r}
+
+tidy_df_nocov_all_dx <- tidy_df_nocov_all %>% filter(grepl("dx", term))
+
+# Add label
+tidy_df_nocov_all_dx$lab <- ifelse(tidy_df_nocov_all_dx$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_nocov_all_dx$estimate) < 0.001, formatC(tidy_df_nocov_all_dx$estimate, format = "e", digits = 2), round(tidy_df_nocov_all_dx$estimate, 3)), ", ", 
+  "p=", ifelse(tidy_df_nocov_all_dx$p.value < 0.001, formatC(tidy_df_nocov_all_dx$p.value, format = "e", digits = 2), round(tidy_df_nocov_all_dx$p.value, 3)), ", ", 
+  "df=", tidy_df_nocov_all_dx$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_nocov_all_dx$celltype <- tidy_df_nocov_all_dx$response
+
+# Change diagnosis name
+tidy_df_nocov_all_dx$dx <- gsub("dx", "", tidy_df_nocov_all_dx$term)
+tidy_df_nocov_all_dx$variable <- "diagnosis"
+
+# Specific order
+tidy_df_nocov_all_dx$MatchDx <- match(tidy_df_nocov_all_dx$dx, c("CTL", "ASD", "SCZ", "AZD"))
+tidy_df_nocov_all_dx$MatchCell <- match(tidy_df_nocov_all_dx$celltype, unique(tidy_df_nocov_all_dx$celltype))
+
+# Plot
+tidy_df_nocov_all_dx %>%
+  mutate(dx = fct_reorder(dx, MatchDx)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, not adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(variable ~ dx)
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_dx_nocov_all.png", height = 3.5, width = 7)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_dx_nocov_all.svg", height = 3.5, width = 7)
+
+```
+
+## Repeat for Jill's analysis
+
+```{r, eval = FALSE}
+
+load("~/Documents/Research/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/ctp_pfc_tc.clr.lm.RData")
+
+# Flip direction of effect around and filter for region
+tidy_df_cov_asd_pfc <- tidy_df_cov_asd_pfc %>% mutate(term = ifelse(term == "ASDCTL", "groupASD", term)) %>% mutate(estimate = ifelse(term == "groupASD", (estimate*-1), estimate)) %>% mutate(conf.low = ifelse(term == "groupASD", (conf.low*-1), conf.low))%>% mutate(conf.high = ifelse(term == "groupASD", (conf.high*-1), conf.high))
+tidy_df_cov_asd_tc <- tidy_df_cov_asd_tc %>% mutate(term = ifelse(term == "ASDCTL", "groupASD", term)) %>% mutate(estimate = ifelse(term == "groupASD", (estimate*-1), estimate)) %>% mutate(conf.low = ifelse(term == "groupASD", (conf.low*-1), conf.low))%>% mutate(conf.high = ifelse(term == "groupASD", (conf.high*-1), conf.high))
+
+# Filter for region
+tidy_df_cov_asd_pfc_dx <- tidy_df_cov_asd_pfc %>% filter(term == "groupASD")
+tidy_df_cov_asd_tc_dx <- tidy_df_cov_asd_tc %>% filter(term == "groupASD")
+
+# clean
+tidy_df_cov_asd_pfc_dx$celltype <- tidy_df_cov_asd_pfc_dx$response
+tidy_df_cov_asd_tc_dx$celltype <- tidy_df_cov_asd_tc_dx$response
+tidy_df_cov_asd_pfc_dx$Region <- "BA9"
+tidy_df_cov_asd_tc_dx$Region <- "BA41-42-22"
+tidy_df_cov_asd_pfc_tc_dx <- rbind(tidy_df_cov_asd_pfc_dx, tidy_df_cov_asd_tc_dx)
+
+# add label
+tidy_df_cov_asd_pfc_dx$lab <- ifelse(tidy_df_cov_asd_pfc_dx$p.value < 0.05, paste(
+  "b=", ifelse(tidy_df_cov_asd_pfc_dx$estimate < 0.001, formatC(tidy_df_cov_asd_pfc_dx$estimate, format = "e", digits = 2), round(tidy_df_cov_asd_pfc_dx$estimate, 3)), ", ", 
+  "p=", ifelse(tidy_df_cov_asd_pfc_dx$p.value < 0.001, formatC(tidy_df_cov_asd_pfc_dx$p.value, format = "e", digits = 2), round(tidy_df_cov_asd_pfc_dx$p.value, 3)), ", ", 
+  "df=", tidy_df_cov_asd_pfc_dx$df.error, sep = ""), NA)
+
+# add match
+tidy_df_cov_asd_pfc_tc_dx$MatchCell <- match(tidy_df_cov_asd_pfc_tc_dx$celltype, unique(tidy_df_cov_asd_pfc_tc_dx$celltype))
+tidy_df_cov_asd_pfc_tc_dx$MatchRegion <- match(tidy_df_cov_asd_pfc_tc_dx$Region, unique(tidy_df_cov_asd_pfc_tc_dx$Region))
+
+tidy_df_cov_asd_pfc_tc_dx %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  mutate(Region = fct_reorder(Region, MatchRegion)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = Region, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(2, name = "Zissou1", type = "continuous"), name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_wrap(~ Region)
+
+ggsave("~/Documents/Research/brain_CTP/Write-up/Progressive/Jill_Pancortical/ASD_brain_PFC_TC_lm_ctp_clr1e-3_all.png", height = 5, width = 6)
+
+# Write output table
+out_jill_pfc <- data.frame(celltype = tidy_df_cov_asd_pfc_dx$celltype, Region = tidy_df_cov_asd_pfc_dx$Region, ASD_effect = tidy_df_cov_asd_pfc_dx$estimate, SE = tidy_df_cov_asd_pfc_dx$std.error, Statistic = tidy_df_cov_asd_pfc_dx$statistic, P = tidy_df_cov_asd_pfc_dx$p.value, FDR = p.adjust(tidy_df_cov_asd_pfc_dx$p.value, "fdr"))
+
+out_jill_tc <- data.frame(celltype = tidy_df_cov_asd_tc_dx$celltype, Region = tidy_df_cov_asd_tc_dx$Region, ASD_effect = tidy_df_cov_asd_tc_dx$estimate, SE = tidy_df_cov_asd_tc_dx$std.error, Statistic = tidy_df_cov_asd_tc_dx$statistic, P = tidy_df_cov_asd_tc_dx$p.value, FDR = p.adjust(tidy_df_cov_asd_tc_dx$p.value, "fdr"))
+
+write.table(out_jill_pfc, "~/Documents/Research/brain_CTP/Write-up/Progressive/Jill_Pancortical/ASD_brain_PFC_lm_dxonly.txt", col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(out_jill_tc, "~/Documents/Research/brain_CTP/Write-up/Progressive/Jill_Pancortical/ASD_brain_TC_lm_dxonly.txt", col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(tidy_df_cov_asd_pfc, "~/Documents/Research/brain_CTP/Write-up/Progressive/Jill_Pancortical/ASD_brain_PFC_lm_fullmodel.txt", col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(tidy_df_cov_asd_tc, "~/Documents/Research/brain_CTP/Write-up/Progressive/Jill_Pancortical/ASD_brain_TC_lm_fullmodel.txt", col.names = T, row.names = F, quote = F, sep = "\t")
+
+```
+
+## Extract sex effect
+
+### Adjusted for covariates
+
+```{r}
+
+tidy_df_cov_all_sex <- rbind(
+  tidy_df_cov_all %>% filter(grepl("sex", term)), 
+  tidy_df_cov_all_mega %>% filter(study == "sex_mega-analysis") %>% filter(grepl("sex", term)) %>% mutate(study = "mega-analysis"))
+
+# Add label
+tidy_df_cov_all_sex$lab <- ifelse(tidy_df_cov_all_sex$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_all_sex$estimate) < 0.001, formatC(tidy_df_cov_all_sex$estimate, format = "e", digits = 2), round(tidy_df_cov_all_sex$estimate, 3)), ", ", 
+  "p=", ifelse(tidy_df_cov_all_sex$p.value < 0.001, formatC(tidy_df_cov_all_sex$p.value, format = "e", digits = 2), round(tidy_df_cov_all_sex$p.value, 3)), ", ", 
+  "df=", tidy_df_cov_all_sex$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_all_sex$celltype <- tidy_df_cov_all_sex$response
+
+# Specific order
+tidy_df_cov_all_sex$MatchCell <- match(tidy_df_cov_all_sex$celltype, unique(tidy_df_cov_all_sex$celltype))
+tidy_df_cov_all_sex$MatchStudy <- match(tidy_df_cov_all_sex$study, unique(tidy_df_cov_all_sex$study))
+
+# Plot
+tidy_df_cov_all_sex %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  mutate(study = fct_reorder(study, MatchStudy)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = study, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(term ~ study)
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_sex_cov_all.png", height = 3.5, width = 10)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_sex_cov_all.svg", height = 3.5, width = 10)
+
+```
+
+## Extract age effect
+
+### Adjusted for covariates
+
+```{r}
+
+tidy_df_cov_all_age <- rbind(
+  tidy_df_cov_all_noage2 %>% filter(grepl("age", term)), 
+  tidy_df_cov_all_mega %>% filter(study == "age_mega-analysis") %>% filter(grepl("age", term)))
+
+# Add label
+tidy_df_cov_all_age$lab <- ifelse(tidy_df_cov_all_age$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_all_age$estimate) < 0.01, formatC(tidy_df_cov_all_age$estimate, format = "e", digits = 1), round(tidy_df_cov_all_age$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_all_age$p.value < 0.01, formatC(tidy_df_cov_all_age$p.value, format = "e", digits = 1), round(tidy_df_cov_all_age$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_all_age$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_all_age$celltype <- tidy_df_cov_all_age$response
+
+# Specific order
+tidy_df_cov_all_age$MatchCell <- match(tidy_df_cov_all_age$celltype, unique(tidy_df_cov_all_age$celltype))
+tidy_df_cov_all_age$MatchStudy <- match(tidy_df_cov_all_age$study, unique(tidy_df_cov_all_age$study))
+
+# Plot
+tidy_df_cov_all_age %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  mutate(study = fct_reorder(study, MatchStudy)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = study, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(term ~ study, scales = "free_x")
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_age_cov_all.png", height = 3.5, width = 10)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_age_cov_all.svg", height = 3.5, width = 10)
+
+```
+
+## Extract age^2 effect (this model doesn't also include age)
+
+### Adjusted for covariates
+
+```{r}
+
+tidy_df_cov_all_age2 <- rbind(
+  tidy_df_cov_all %>% filter(grepl("age2", term)), 
+  tidy_df_cov_all_mega %>% filter(study == "age2_mega-analysis") %>% filter(grepl("age2", term)))
+
+# Add label
+tidy_df_cov_all_age2$lab <- ifelse(tidy_df_cov_all_age2$p.value < 0.05, paste(
+  "b=", ifelse(tidy_df_cov_all_age2$estimate < 0.01, formatC(tidy_df_cov_all_age2$estimate, format = "e", digits = 1), round(tidy_df_cov_all_age2$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_all_age2$p.value < 0.01, formatC(tidy_df_cov_all_age2$p.value, format = "e", digits = 1), round(tidy_df_cov_all_age2$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_all_age2$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_all_age2$celltype <- gsub("NonN_", "", tidy_df_cov_all_age2$response)
+tidy_df_cov_all_age2$celltype <- gsub("_FGF3R", "", tidy_df_cov_all_age2$celltype)
+tidy_df_cov_all_age2$celltype <- gsub("_TYROBP", "", tidy_df_cov_all_age2$celltype)
+tidy_df_cov_all_age2$celltype <- gsub("_MBP", "", tidy_df_cov_all_age2$celltype)
+
+# Specific order
+tidy_df_cov_all_age2$MatchCell <- match(tidy_df_cov_all_age2$celltype, unique(tidy_df_cov_all_age2$celltype))
+tidy_df_cov_all_age2$MatchStudy <- match(tidy_df_cov_all_age2$study, unique(tidy_df_cov_all_age2$study))
+
+# Plot
+tidy_df_cov_all_age2 %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  mutate(study = fct_reorder(study, MatchStudy)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = study, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(term ~ study, scales = "free_x")
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_age2_cov_all.png", height = 3.5, width = 10)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_age2_cov_all.svg", height = 3.5, width = 10)
+
+```
+
+## Extract mega-analysis results only
+
+```{r}
+
+tidy_df_cov_mega_sex_age <- rbind(
+  tidy_df_cov_all_mega %>% filter(study == "age_mega-analysis") %>% filter(grepl("age", term)), 
+  tidy_df_cov_all_mega %>% filter(study == "sex_mega-analysis") %>% filter(grepl("sex", term))) %>% mutate(study = "mega-analysis")
+
+# Add label
+tidy_df_cov_mega_sex_age$lab <- ifelse(tidy_df_cov_mega_sex_age$p.value < 0.05, paste(
+  "b=", ifelse(tidy_df_cov_mega_sex_age$estimate < 0.01, formatC(tidy_df_cov_mega_sex_age$estimate, format = "e", digits = 1), round(tidy_df_cov_mega_sex_age$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_mega_sex_age$p.value < 0.01, formatC(tidy_df_cov_mega_sex_age$p.value, format = "e", digits = 1), round(tidy_df_cov_mega_sex_age$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_mega_sex_age$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_mega_sex_age$celltype <- tidy_df_cov_mega_sex_age$response
+
+# Specific order
+tidy_df_cov_mega_sex_age$MatchCell <- match(tidy_df_cov_mega_sex_age$celltype, unique(tidy_df_cov_mega_sex_age$celltype))
+
+# Plot
+tidy_df_cov_mega_sex_age %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = study, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(6, name = "Zissou1", type = "continuous")[c(1,5,6)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(study ~ term, scales = "free_x")
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_sex_age_cov_mega.png", height = 3.5, width = 7)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_sex_age_cov_mega.svg", height = 3.5, width = 7)
+
+```
+
+## CTL only
+
+- N.B. ASDbrain all on batch1 now (after excluding some people and taking only CTL)
+
+```{r}
+
+# Take CTL as reference
+ctp.clr.1e3$dx <- relevel(as.factor(ctp.clr.1e3$dx), ref = "CTL")
+
+# With covariates
+# - ASD: N.B. no batch variable included as all CTL in one batch
+tidy_df_cov_asd_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASDbrain CTL")
+
+tidy_df_cov_scz_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "LIBD CTL")
+
+tidy_df_cov_azd_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP")  %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ROSMAP CTL")
+
+tidy_df_cov_all_sex_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "sex_mega-analysis CTL")
+
+tidy_df_cov_all_age2_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age2 + sex + batch, data = ctp.clr.1e3 %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "age2_mega-analysis CTL")
+
+tidy_df_cov_sex_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + age2 + sex + batch, data = ctp.clr.1e3), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "sex_mega-analysis CTL")
+
+# With covariates: excluding age2
+tidy_df_cov_asd_noage2_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + sex, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID) %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASDbrain (ASD) CTL")
+
+tidy_df_cov_scz_noage2_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude[,1]) %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "LIBD (SCZ) CTL")
+
+tidy_df_cov_azd_noage2_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP") %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ROSMAP (AZD) CTL")
+
+tidy_df_cov_all_age_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ age + sex + batch, data = ctp.clr.1e3 %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "age_mega-analysis")
+
+tidy_df_cov_all_CTL <- rbind(tidy_df_cov_asd_CTL, tidy_df_cov_scz_CTL, tidy_df_cov_azd_CTL)
+tidy_df_cov_all_noage2_CTL <- rbind(tidy_df_cov_asd_noage2_CTL, tidy_df_cov_scz_noage2_CTL, tidy_df_cov_azd_noage2_CTL)
+tidy_df_cov_all_mega_CTL <- rbind(tidy_df_cov_all_sex_CTL, tidy_df_cov_all_age_CTL, tidy_df_cov_all_age2_CTL)
+
+```
+
+### Age
+
+```{r}
+
+tidy_df_cov_all_age_CTL <- rbind(
+  tidy_df_cov_all_noage2_CTL %>% filter(grepl("age", term)), 
+  tidy_df_cov_all_mega_CTL %>% filter(study == "age_mega-analysis CTL") %>% filter(grepl("age", term)) %>% mutate(study = "mega-analysis"))
+
+# Add label
+tidy_df_cov_all_age_CTL$lab <- ifelse(tidy_df_cov_all_age_CTL$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_all_age_CTL$estimate) < 0.01, formatC(tidy_df_cov_all_age_CTL$estimate, format = "e", digits = 1), round(tidy_df_cov_all_age_CTL$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_all_age_CTL$p.value < 0.01, formatC(tidy_df_cov_all_age_CTL$p.value, format = "e", digits = 1), round(tidy_df_cov_all_age_CTL$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_all_age_CTL$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_all_age_CTL$celltype <- tidy_df_cov_all_age_CTL$response
+
+# Specific order
+tidy_df_cov_all_age_CTL$MatchCell <- match(tidy_df_cov_all_age_CTL$celltype, unique(tidy_df_cov_all_age_CTL$celltype))
+tidy_df_cov_all_age_CTL$MatchStudy <- match(tidy_df_cov_all_age_CTL$study, unique(tidy_df_cov_all_age_CTL$study))
+
+# Plot
+tidy_df_cov_all_age_CTL %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  mutate(study = fct_reorder(study, MatchStudy)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = study, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(term ~ study, scales = "free_x")
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_age_cov_all_CTL.png", height = 3.5, width = 10)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_age_cov__all_CTL.svg", height = 3.5, width = 10)
+
+```
+
+### Sex
+
+```{r}
+
+tidy_df_cov_all_sex_CTL <- rbind(
+  tidy_df_cov_all_CTL %>% filter(grepl("sex", term)), 
+  tidy_df_cov_all_mega_CTL %>% filter(study == "sex_mega-analysis CTL") %>% filter(grepl("sex", term)) %>% mutate(study = "mega-analysis"))
+
+# Add label
+tidy_df_cov_all_sex_CTL$lab <- ifelse(tidy_df_cov_all_sex_CTL$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_all_sex_CTL$estimate) < 0.001, formatC(tidy_df_cov_all_sex_CTL$estimate, format = "e", digits = 2), round(tidy_df_cov_all_sex_CTL$estimate, 3)), ", ", 
+  "p=", ifelse(tidy_df_cov_all_sex_CTL$p.value < 0.001, formatC(tidy_df_cov_all_sex_CTL$p.value, format = "e", digits = 2), round(tidy_df_cov_all_sex_CTL$p.value, 3)), ", ", 
+  "df=", tidy_df_cov_all_sex_CTL$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_all_sex_CTL$celltype <- tidy_df_cov_all_sex_CTL$response
+
+# Specific order
+tidy_df_cov_all_sex_CTL$MatchCell <- match(tidy_df_cov_all_sex_CTL$celltype, unique(tidy_df_cov_all_sex_CTL$celltype))
+tidy_df_cov_all_sex_CTL$MatchStudy <- match(tidy_df_cov_all_sex_CTL$study, unique(tidy_df_cov_all_sex_CTL$study))
+
+# Plot
+tidy_df_cov_all_sex_CTL %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  mutate(study = fct_reorder(study, MatchStudy)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = study, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(term ~ study)
+
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_sex_cov_all_CTL.png", height = 3.5, width = 10)
+ggsave("~/Documents/Research/brain_CTP/Data/integration/ctp_differences/lm_ctp_clr1e-3_sex_cov_all_CTL.svg", height = 3.5, width = 10)
+
+```

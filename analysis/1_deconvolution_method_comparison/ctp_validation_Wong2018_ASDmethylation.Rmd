@@ -1,0 +1,1125 @@
+---
+title: "Methylation CTP validation EDA: Wong2018 ASD methylation"
+author: "Chloe Yap"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+---
+
+**To run**: Beforehand:
+
+    module load pandoc
+
+In R:
+
+```{r, eval = FALSE}
+setwd("~/shared-gandalm/brain_CTP/Scripts/methylation/analysis/combine_methods/ctp_validation")
+rmarkdown::render("ctp_validation_Wong2018_ASDmethylation.Rmd", "html_document")
+```
+
+# Set-up
+
+## Directories and libraries
+
+```{r, message = F, warning = F}
+
+library(tidyverse)
+library(rmarkdown)    # You need this library to run this template.
+library(epuRate)      # Install with remotes::install_github("holtzy/epuRate", force=TRUE) - use this instead of devtools::install_github()
+library(data.table)
+library(DT)
+library(tidyverse)
+library(dplyr)
+library(reshape2)
+library(uwot) # for umap
+library(methylCC)
+library(lme4)
+library(compositions)
+library(zCompositions)
+library(mixOmics)
+source("~/project-gandalm/software/ANCOM-v2.1/scripts/ancom_v2.1.R")
+library(ALDEx2)
+library(factoextra)
+library(ggplot2)
+library(RColorBrewer)
+library(viridis)
+library(ggpubr)
+library(GGally)
+library(lattice)
+library(gridExtra)
+
+# BiocManager::install("M3C")
+# library(M3C)
+
+```
+
+```{r}
+
+filen <- "KCL_R01MH094714_ASD_Illumina450K_PFC"
+out_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis"
+
+# Cell-type number
+cellnum <- 9
+cellnum <- 7
+
+write_out = TRUE
+
+# Read in reference object
+# - use chisq statistic, 5 cell-types, bonferroni p<0.001, marker contributing >=50% of chisq stat, take top 200
+#ref_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/Luo2020_chisq_dmr_cell5_bonf001_contr50pc_top200.rds"
+# - use extreme_methylation_sites.R output
+#ref_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/Luo2020_extreme17_dmr_low0.3_high0.7.rds"
+# - use chisq statistic, 5 cell-types, bonferroni p<0.001, marker contributing >=50% of chisq stat, take top 200
+#ref_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/Luo2020_chisq_dmr_cell5_bonf001_contr50pc_top200.rds"
+#ref_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/Luo2020_chisq_dmr_ilmn450kepic_aggto100bp_cell7_bonf001_contr50pc_top200.rds"
+#ref <- readRDS(ref_dir)
+
+# Pheno
+pheno_dir <- "~/shared-gandalm/brain_CTP/Data/pheno/ASD_methylation_brain/Wong_ASD_Brain_Methylation_SuppTable1_pheno.csv"
+
+# methylCC
+# - use Luo et al. reference with DMRs identified from 450K overlap 
+#saveRDS(methylcc_out, paste(out_dir, "/", filen, "_aut_mask_methylcc_out_n200_p1e-6.rds", sep = ""))
+# - use 450K dlpfc guintivano reference (+/- randomisation of sample order)
+#saveRDS(methylcc_out, paste(out_dir, "/", filen, "_aut_mask_methylcc_out_n200_dlpfc_450k_guintivano_hpc.rds", sep = ""))
+# - use Luo et al. reference with DMRs pre-identified by Luo et al.
+#saveRDS(methylcc_out, paste(out_dir, "/", filen, "_aut_mask_predmr_ilmn450k_celltype_na5_methylcc_dmr_n200_p1e_1.rds", sep = ""))
+# - use extreme_methylation_sites.R output
+#saveRDS(methylcc_out, paste(out_dir, "/", filen, "_aut_mask_extreme17_dmr_low0.3_high0.7.rds", sep = ""))
+# - use chisq statistic, 5 cell-types, bonferroni p<0.001, marker contributing >=50% of chisq stat, take top 200
+#saveRDS(methylcc_out, paste(out_dir, "/", filen, "_aut_mask_chisq_dmr_cell5_bonf001_contr50pc_top200.rds", sep = ""))
+#methylcc_dir <- paste(out_dir, "/", filen, "_aut_mask_chisq_dmr_cell5_bonf001_contr50pc_top200.rds", sep = "")
+filen0 <- "KCL_R01MH094714_ASD_Illumina450K_PFC"
+# methylcc_dir <- paste(out_dir, "/", filen0, "_aut_mask_chisq_dmr_cell5_bonf001_contr50pc_top200_aggpostmcc.txt", sep = "")
+#methylcc_dir <- paste(out_dir, "/", filen0, "_aut_mask_chisq_dmr_ilmn450kepic_aggto100bp_cell7_bonf001_contr50pc_top200_aggpostmcc.txt", sep = "")
+
+if (cellnum == 9) {
+  methylcc_dir <- paste(out_dir, "/", filen0, "_aut_mask_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell9_split6040all_aggpostmcc.txt", sep = "")
+} else if (cellnum == 7) {
+  methylcc_dir <- paste(out_dir, "/", filen0, "_aut_mask_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_aggpostmcc.txt", sep = "")
+}
+
+# methylCC with NeuN+/- data (Guintivano DLPFC)
+methylcc_neun_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/KCL_R01MH094714_ASD_Illumina450K_PFC_aut_mask_methylcc_out_n200_dlpfc_450k_guintivano_hpc.rds"
+
+# eBayes + Houseman
+houseman_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/KCL_R01MH094714_ASD_Illumina450K_PFC_ref450K_toast_houseman_ls.rds"
+
+# sequencing with extremes + Houseman
+houseman_seq_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/KCL_R01MH094714_ASD_Illumina450K_PFC_Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_houseman_ls.rds"
+
+# celfie
+celfie_dir <-  "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/celfie/KCL_R01MH094714_ASD_Illumina450K_PFC_celfie.out/1_tissue_proportions.txt"
+celfie_label_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/celfie/KCL_R01MH094714_ASD_Illumina450K_PFC_celfie.in"
+
+# ReFACToR
+#refactor_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/KCL_R01MH094714_ASD_Illumina450K_PFC_k8_cov.refactor.components.txt"
+
+# smartSV
+smartsva_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis/ASD_methylation_brain_SmartSVA.rds"
+
+# VAE/MethylNet
+vae_dir <- "~/shared-gandalm/brain_CTP/Data/integration/methylnet/combined/full_output_latent.csv"
+
+```
+
+## Read-in data
+
+```{r}
+
+# Pheno
+pheno <- read.csv(pheno_dir, header = T, as.is = T)
+colnames(pheno)[which(colnames(pheno) == "SampleName")] <- "IID"
+colnames(pheno)[which(colnames(pheno) == "Age")] <- "age"
+colnames(pheno)[which(colnames(pheno) == "Sex")] <- "sex"
+pheno$Batch <- as.factor(pheno$Batch)
+pheno$group <- ifelse(pheno$Diagnosis == "CTL", "CTL", "ASD")
+
+# methylCC
+methylcc_ctp <- read.delim(methylcc_dir)
+ind <- grep("NonN", colnames(methylcc_ctp))
+foo <- colnames(methylcc_ctp)[ind]
+foo2 <- unlist(lapply(strsplit(gsub("NonN_", "", foo), "_"), function(x) x[1]))
+colnames(methylcc_ctp)[ind] <- foo2
+colnames(methylcc_ctp)[2:ncol(methylcc_ctp)] <- paste("mcc_", colnames(methylcc_ctp)[2:ncol(methylcc_ctp)], sep = "")
+# methylcc <- readRDS(methylcc_dir)
+# methylcc_ctp <- cell_counts(methylcc)
+# ctp_sum <- methylcc@summary
+# ctp_input <- ctp_sum$input
+# colSums(ctp_input$zmat)
+# # Would use this to mimic Supp Fig 1
+# colSums(ref$zmat) # this is the initial starting proportions
+
+# methylCC on Guintivano DLPFC reference (NeuN+/-)
+# methylcc_neun <- readRDS(methylcc_neun_dir)
+# methylcc_neun_ctp <- cell_counts(methylcc_neun)
+# colnames(methylcc_neun_ctp) <- c("mcc_NeuN_neg", "mcc_NeuN_pos")
+# ctp_neun_sum <- methylcc_neun@summary
+# ctp_neun_input <- ctp_neun_sum$input
+# colSums(ctp_neun_input$zmat)
+
+# eBayes + Houseman
+houseman.ls <- readRDS(houseman_dir)
+# - coefs_sub
+coefs_sub <- houseman.ls$coefs_sub
+colnames(coefs_sub)[2:ncol(coefs_sub)] <- paste("h_", colnames(coefs_sub)[2:ncol(coefs_sub)], sep = "")
+colnames(coefs_sub)[ncol(coefs_sub)] <- "h_error_sub"
+coefs_brain <- houseman.ls$coefs_brain
+colnames(coefs_brain)[2:ncol(coefs_brain)] <- paste("h_", colnames(coefs_brain)[2:ncol(coefs_brain)], sep = "")
+colnames(coefs_brain)[ncol(coefs_brain)] <- "h_error_brain"
+
+# sequencing + Houseman
+houseman_seq.ls <- readRDS(houseman_seq_dir)
+houseman_seq <- houseman_seq.ls[[1]]
+ind <- grep("NonN", colnames(houseman_seq))
+foo <- colnames(houseman_seq)[ind]
+foo2 <- unlist(lapply(strsplit(gsub("NonN_", "", foo), "_"), function(x) x[1]))
+colnames(houseman_seq)[ind] <- foo2
+colnames(houseman_seq)[2:ncol(houseman_seq)] <- paste("hseq_", colnames(houseman_seq)[2:ncol(houseman_seq)], sep = "")
+
+# CelFIE
+celfie <- fread(celfie_dir)
+colnames(celfie) <- c("IID_short", "celfie_Exc", "celfie_Inh", "celfie_Astro", "celfie_Endo", "celfie_Micro", "celfie_Oligo", "celfie_OPC", "unknown1")
+iid_short <- data.frame(IID = pheno$IID[which(pheno$RegionID == "BA9")])
+iid_short$IID_short <- unlist(lapply(strsplit(iid_short$IID, "_"), function(x) x[1]))
+celfie <- inner_join(iid_short, celfie, by = "IID_short")
+#celfie_label <- fread(celfie_label_dir)
+
+# ReFACToR
+# refactor <- read.table(refactor_dir, header = T, as.is = T)
+# colnames(refactor)[1] <- "IID"
+
+# smartSVA
+smartsva <- readRDS(smartsva_dir)$KCL_R01MH094714_ASD_Illumina450K_PFC
+smartsva <- data.frame(IID = rownames(smartsva), smartsva)
+
+# VAE, MethylNet
+vae <- read.csv(vae_dir)
+colnames(vae) <- c("IID", paste("VAEe", 0:9, sep = ""))
+
+```
+
+### Join into 1 dataframe
+
+```{r}
+
+#ctp_pheno <- inner_join(data.frame(IID = rownames(methylcc_ctp), methylcc_ctp), pheno, by = "IID")
+methylcc_ctp.tmp <- methylcc_ctp
+methylcc_ctp.tmp$mcc_Glial <- rowSums(methylcc_ctp.tmp[,-c(grep("IID", colnames(methylcc_ctp.tmp)), grep("Exc", colnames(methylcc_ctp.tmp)), grep("Inh", colnames(methylcc_ctp.tmp)))])
+methylcc_ctp.tmp$mcc_Neuron <- rowSums(methylcc_ctp.tmp[,c(grep("Exc", colnames(methylcc_ctp.tmp)), grep("Inh", colnames(methylcc_ctp.tmp)))])
+ctp_pheno <- inner_join(methylcc_ctp.tmp, pheno, by = "IID")
+#ctp_pheno <- inner_join(ctp_pheno, data.frame(IID = rownames(methylcc_neun_ctp), methylcc_neun_ctp), by = "IID")
+ctp_pheno <- inner_join(ctp_pheno, smartsva, by = "IID")
+
+# Houseman with array reference
+ctp_pheno <- inner_join(ctp_pheno, coefs_sub, by = "IID")
+ctp_pheno <- inner_join(ctp_pheno, coefs_brain, by = "IID")
+ctp_pheno$h_Glial <- rowSums(ctp_pheno[,c("h_ASTRO", "h_OPC", "h_OLIGO", "h_ENDO", "h_MONO")])
+ctp_pheno$h_Neuron <- rowSums(ctp_pheno[,c("h_GABA", "h_GLU")])
+
+# Houseman with sequencing reference
+ctp_pheno <- inner_join(ctp_pheno, houseman_seq, by = "IID")
+ctp_pheno$hseq_Glial <- rowSums(ctp_pheno[,c("hseq_Astro", "hseq_Endo", "hseq_Micro", "hseq_Oligo", "hseq_OPC")])
+ctp_pheno$hseq_Neuron <- rowSums(ctp_pheno[,c("hseq_Exc", "hseq_Inh")])
+
+# CelFIE
+ctp_pheno <- inner_join(ctp_pheno, celfie, by = c("IID"))
+ctp_pheno$celfie_Glial <- rowSums(ctp_pheno[,c("celfie_Astro", "celfie_Endo", "celfie_Micro", "celfie_Oligo", "celfie_OPC")])
+ctp_pheno$celfie_Neuron <- rowSums(ctp_pheno[,c("celfie_Exc", "celfie_Inh")])
+
+# Choice to exclude Oxford brain bank subset
+# - choose not to as lose statistical power ...
+# ctp_pheno <- ctp_pheno %>% filter(BrainBank != "Oxford")
+
+ctp_pheno <- left_join(ctp_pheno, vae, by = "IID")
+
+```
+
+### Write output
+
+```{r}
+
+if (write_out == TRUE) {
+  write.table(ctp_pheno, paste(out_dir, "/", filen, "_ctp_pheno.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+### Set variables
+
+```{r}
+
+keep_cols <- c("IID", "group", "age", "sex", "Batch", "PMI", "BrainBank")
+
+ctp_cols <- c(colnames(ctp_pheno)[grep("hseq", colnames(ctp_pheno))])
+ctp_cols <- ctp_cols[-which(ctp_cols == "hseq_error")]
+level2_cols <- ctp_cols[-which(ctp_cols %in% c("hseq_Glial", "hseq_Neuron"))]
+
+glial_rmoligo_n <- colnames(ctp_pheno)[grep("hseq", colnames(ctp_pheno))]
+glial_rmoligo_n <- glial_rmoligo_n[-which(glial_rmoligo_n %in% c("hseq_Exc", "hseq_Inh", "hseq_Oligo", "hseq_error", "hseq_Glial", "hseq_Neuron"))]
+neuron_n <- c("hseq_Exc", "hseq_Inh")
+
+```
+
+# Check baseline variable differences
+
+- look for confounding
+- there is confounding for age, brain bank, batch (when looking at the PFC samples only)
+- this means that accounting for covariates might also take out the ASD signal?!
+
+```{r}
+
+# BrainBank
+brainbank <- ctp_pheno %>% group_by(group, BrainBank) %>% summarise(n=n()) %>% spread(group, n)
+brainbank
+chisq.test(brainbank %>% dplyr::select("ASD", "CTL"))
+
+# Batch
+batch <- ctp_pheno %>% group_by(group, Batch) %>% summarise(n=n()) %>% spread(group, n)
+batch
+#chisq.test(batch %>% dplyr::select("ASD", "CTL"))
+
+# Sex
+sex <- ctp_pheno %>% group_by(group, sex) %>% summarise(n=n()) %>% spread(group, n)
+sex
+chisq.test(sex %>% dplyr::select("ASD", "CTL"))
+
+# Age
+summary(lm(age ~ group, data = ctp_pheno))
+ggplot(ctp_pheno, aes(x = age, colour = group, fill = group)) + geom_histogram() + facet_wrap(~group)
+
+# BrainBank x age x group
+ctp_pheno %>% group_by(BrainBank, group) %>% summarise(mean = mean(age), sd = sd(age))
+
+```
+
+# Check association of sSVs and batch effects
+
+```{r}
+
+tmp.long <- ctp_pheno %>% dplyr::select(c("IID", "BrainBank", "Batch", "sex", "age", "group", "hseq_Glial", "sSV1", "sSV2", "sSV3", "sSV4", "sSV5", "sSV6", "sSV7", "sSV8")) %>% melt(id.vars = c("IID", "BrainBank", "Batch", "sex", "age", "group", "hseq_Glial"), variable.name = "sSV_num", value.name = "sSV")
+
+ggplot(tmp.long, aes(x = BrainBank, y = sSV)) + geom_boxplot() + facet_wrap(~ sSV_num, scales = "free_y")
+ggplot(tmp.long, aes(x = Batch, y = sSV, colour = Batch)) + geom_boxplot() + facet_wrap(~ sSV_num, scales = "free_y")
+ggplot(tmp.long, aes(x = Batch, y = sSV, colour = BrainBank)) + geom_boxplot() + facet_wrap(~ sSV_num, scales = "free_y")
+ggplot(tmp.long, aes(x = group, y = sSV, colour = group)) + geom_boxplot() + facet_wrap(~ sSV_num, scales = "free_y")
+ggplot(tmp.long, aes(x = sex, y = sSV)) + geom_boxplot() + facet_wrap(~ sSV_num)
+ggplot(tmp.long, aes(x = age, y = sSV, colour = BrainBank)) + geom_point() + geom_smooth(method = "lm") + facet_wrap(~ sSV_num)
+ggplot(tmp.long, aes(x = hseq_Glial, y = sSV, colour = BrainBank)) + geom_point() + geom_smooth(method = "lm") + facet_wrap(~ sSV_num)
+
+```
+
+# Check association of VAE embeddings and batch effects
+
+```{r}
+
+tmp.long <- ctp_pheno %>% dplyr::select(c("IID", "BrainBank", "Batch", "sex", "age", "group", "hseq_Glial", "VAEe0", "VAEe1", "VAEe2", "VAEe3", "VAEe4", "VAEe5", "VAEe6", "VAEe7", "VAEe8", "VAEe9")) %>% melt(id.vars = c("IID", "BrainBank", "Batch", "sex", "age", "group", "hseq_Glial"), variable.name = "VAEe", value.name = "embedding")
+
+ggplot(tmp.long, aes(x = BrainBank, y = embedding)) + geom_boxplot() + facet_wrap(~ VAEe, scales = "free_y")
+ggplot(tmp.long, aes(x = Batch, y = embedding, colour = Batch)) + geom_boxplot() + facet_wrap(~ VAEe, scales = "free_y")
+ggplot(tmp.long, aes(x = Batch, y = embedding, colour = BrainBank)) + geom_boxplot() + facet_wrap(~ VAEe, scales = "free_y")
+ggplot(tmp.long, aes(x = group, y = embedding, colour = group)) + geom_boxplot() + facet_wrap(~ VAEe, scales = "free_y")
+ggplot(tmp.long, aes(x = sex, y = embedding)) + geom_boxplot() + facet_wrap(~ VAEe)
+ggplot(tmp.long, aes(x = age, y = embedding, colour = BrainBank)) + geom_point() + geom_smooth(method = "lm") + facet_wrap(~ VAEe)
+ggplot(tmp.long, aes(x = hseq_Glial, y = embedding, colour = BrainBank)) + geom_point() + geom_smooth(method = "lm") + facet_wrap(~ VAEe)
+
+```
+
+# Boxplots - raw
+
+Add analysis info on
+
+```{r, fig.width = 8, fig.height = 12}
+
+houseman_seq.long <- melt(houseman_seq, variable.name = "celltype", value.name = "seq_houseman_CTP")
+houseman_seq.gg <- ggplot(houseman_seq.long, aes(x = celltype, y = seq_houseman_CTP, colour = celltype)) + geom_boxplot() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(c(0,1))
+
+methylcc_ctp.long <- melt(methylcc_ctp, variable.name = "celltype", value.name = "methylcc_CTP")
+methylcc_ctp.gg <- ggplot(methylcc_ctp.long, aes(x = celltype, y = methylcc_CTP, colour = celltype)) + geom_boxplot() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(c(0,1))
+#+ theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
+
+coefs_sub.long <- melt(coefs_sub, variable.name = "celltype", value.name = "eBayes_houseman_CTP") %>% mutate(MatchCell = match(celltype, c("h_GLU", "h_GABA", "h_ASTRO", "h_ENDO", "h_MONO", "h_OLIGO", "h_OPC")))
+coefs_sub.gg <- coefs_sub.long %>% mutate(celltype = fct_reorder(celltype, MatchCell)) %>% ggplot(aes(x = celltype, y = eBayes_houseman_CTP, colour = celltype)) + geom_boxplot() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(c(0,1))
+
+coefs_brain.long <- melt(coefs_brain, variable.name = "celltype", value.name = "eBayes_houseman_CTP")
+coefs_brain.gg <- ggplot(coefs_brain.long, aes(x = celltype, y = eBayes_houseman_CTP, colour = celltype)) + geom_boxplot() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(c(0,1))
+
+smartsva.long <- melt(smartsva, variable.name = "celltype", value.name = "smartsva_CTP")
+smartsva.gg <- ggplot(smartsva.long, aes(x = celltype, y = smartsva_CTP, colour = celltype)) + geom_boxplot()  + theme(legend.position = "none", axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+vae.long <- melt(vae, id.vars = c("IID"), variable.name = "celltype", value.name = "VAE_embed")
+vae.gg <- ggplot(vae.long, aes(x = celltype, y = VAE_embed, colour = celltype)) + geom_boxplot() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(c(0,1))
+
+celfie.long <- melt(celfie, id.vars = c("IID", "IID_short"), variable.name = "celltype", value.name = "CelFIE_CTP")
+celfie.gg <- ggplot(celfie.long, aes(x = celltype, y = CelFIE_CTP, colour = celltype)) + geom_boxplot() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ylim(c(0,1))
+
+ggarrange(houseman_seq.gg, methylcc_ctp.gg, coefs_sub.gg, coefs_brain.gg, celfie.gg, smartsva.gg, nrow = 3, ncol = 2)
+
+```
+
+## houseman_seq
+
+```{r}
+
+# - boxplot
+hseq_ctp_pheno.tmp <- ctp_pheno %>% dplyr::select(c(all_of(keep_cols), all_of(ctp_cols)))
+
+if (write_out == TRUE) {
+  write.table(hseq_ctp_pheno.tmp, paste(out_dir, "/hseq_ctp_pheno.raw.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+```{r}
+
+hseq_ctp_pheno.long <- melt(hseq_ctp_pheno.tmp, measure.vars = c(all_of(ctp_cols)), variable.name = "celltype", value.name = "CTP")
+hseq_ctp_pheno.long$Level <- ifelse(hseq_ctp_pheno.long$celltype %in% c("hseq_Neuron", "hseq_Glial"), "Level1", "Level2")
+hseq_ctp_pheno.long$Region <- "PFC"
+hseq_ctp_pheno.long$celltype <- gsub("hseq_", "", hseq_ctp_pheno.long$celltype)
+hseq_ctp_pheno.long$celltype <- unlist(lapply(strsplit(hseq_ctp_pheno.long$celltype, "_"), function(x) x[1]))
+hseq_ctp_pheno.long$MatchCell <- match(hseq_ctp_pheno.long$celltype, rev(c("Exc", "Inh", "Astro", "Micro", "Endo", "Oligo", "OPC", "Neuron", "Glial")))
+hseq_ctp_pheno.long %>% mutate(celltype = fct_reorder(celltype, MatchCell)) %>%
+  ggplot(aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +   
+    facet_grid(Level~Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+### Adjust for oligodendrocyte proportion
+
+```{r}
+
+# New adjustment which only changes neuronal populations
+hseq_ctp_pheno_adjoligo.tmp <- hseq_ctp_pheno.tmp %>%
+  mutate(sum_neuro_oligo = hseq_Exc + hseq_Inh + hseq_Oligo) %>%
+  mutate(Exc_Inh_ratio = (hseq_Exc/(hseq_Exc + hseq_Inh))) %>%
+  mutate(Inh_Exc_ratio = (hseq_Inh/(hseq_Exc + hseq_Inh))) %>%
+  mutate(hseq_Exc = Exc_Inh_ratio * sum_neuro_oligo) %>%
+  mutate(hseq_Inh = Inh_Exc_ratio * sum_neuro_oligo) %>%
+  dplyr::select(-c("hseq_Oligo", "hseq_Neuron", "hseq_Glial"))
+
+# Old adjustment which changed ALL CTPs
+# methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo <- methylcc_ctp_pheno_adjoligo.tmp$Exc + methylcc_ctp_pheno_adjoligo.tmp $Inh + methylcc_ctp_pheno_adjoligo.tmp$NonN_Astro_FGF3R + methylcc_ctp_pheno_adjoligo.tmp$NonN_Micro.Endo_TYROBP
+# methylcc_ctp_pheno_adjoligo.tmp$Exc <- methylcc_ctp_pheno_adjoligo.tmp$Exc/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+# methylcc_ctp_pheno_adjoligo.tmp$Inh <- methylcc_ctp_pheno_adjoligo.tmp$Inh/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+# methylcc_ctp_pheno_adjoligo.tmp$NonN_Astro_FGF3R <- methylcc_ctp_pheno_adjoligo.tmp$NonN_Astro_FGF3R/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+# methylcc_ctp_pheno_adjoligo.tmp$NonN_Micro.Endo_TYROBP <- methylcc_ctp_pheno_adjoligo.tmp$NonN_Micro.Endo_TYROBP/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+
+hseq_ctp_pheno_adjoligo.tmp$hseq_Neuron <- rowSums(hseq_ctp_pheno_adjoligo.tmp[,neuron_n])
+hseq_ctp_pheno_adjoligo.tmp$hseq_Glial <- rowSums(hseq_ctp_pheno_adjoligo.tmp[,glial_rmoligo_n])
+
+if (write_out == TRUE) {
+  write.table(hseq_ctp_pheno_adjoligo.tmp, paste(out_dir, "/hseq_adjoligo_ctp_pheno.raw.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+```{r}
+
+hseq_ctp_pheno_adjoligo.long <- melt(hseq_ctp_pheno_adjoligo.tmp, measure.vars = c(all_of(neuron_n), all_of(glial_rmoligo_n), "hseq_Neuron", "hseq_Glial"), variable.name = "celltype", value.name = "CTP")
+hseq_ctp_pheno_adjoligo.long$Level <- ifelse(hseq_ctp_pheno_adjoligo.long$celltype %in% c("hseq_Neuron", "hseq_Glial"), "Level1", "Level2")
+hseq_ctp_pheno_adjoligo.long$Region <- "PFC"
+hseq_ctp_pheno_adjoligo.long$celltype <- gsub("hseq_", "", hseq_ctp_pheno_adjoligo.long$celltype)
+
+hseq_ctp_pheno_adjoligo.long %>% mutate(celltype = fct_reorder(celltype, match(celltype, rev(c("Exc", "Inh", "Astro", "Endo", "Micro", "OPC"))))) %>%
+  ggplot(aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +   
+    facet_grid(Level~Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+
+## methylCC
+
+```{r}
+
+ctp_cols_mcc <- gsub("hseq", "mcc", ctp_cols)
+neuron_n_mcc <- gsub("hseq", "mcc", neuron_n)
+glial_rmoligo_n_mcc <- gsub("hseq", "mcc", glial_rmoligo_n)
+
+# - boxplot
+methylcc_ctp_pheno.tmp <- ctp_pheno %>% dplyr::select(c(all_of(keep_cols), all_of(ctp_cols_mcc)))
+
+if (write_out == TRUE) {
+  write.table(methylcc_ctp_pheno.tmp, paste(out_dir, "/methylcc_ctp_pheno.raw.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+```{r}
+
+methylcc_ctp_pheno.long <- melt(methylcc_ctp_pheno.tmp, measure.vars = c(all_of(ctp_cols_mcc)), variable.name = "celltype", value.name = "CTP")
+methylcc_ctp_pheno.long$Level <- ifelse(methylcc_ctp_pheno.long$celltype %in% c("mcc_Neuron", "mcc_Glial"), "Level1", "Level2")
+methylcc_ctp_pheno.long$Region <- "PFC"
+methylcc_ctp_pheno.long$celltype <- gsub("mcc_", "", methylcc_ctp_pheno.long$celltype)
+
+methylcc_ctp_pheno.long %>% mutate(celltype = fct_reorder(celltype, match(celltype, rev(c("Exc", "Inh", "Astro", "Endo", "Micro", "Oligo", "OPC"))))) %>%
+ggplot(aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +   
+    facet_grid(Level~Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+### Adjust for oligodendrocyte proportion
+
+```{r}
+
+# New adjustment which only changes neuronal populations
+methylcc_ctp_pheno_adjoligo.tmp <- methylcc_ctp_pheno.tmp %>%
+  mutate(sum_neuro_oligo = mcc_Exc + mcc_Inh + mcc_Oligo) %>%
+  mutate(Exc_Inh_ratio = (mcc_Exc/(mcc_Exc +mcc_Inh))) %>%
+  mutate(Inh_Exc_ratio = (mcc_Inh/(mcc_Exc + mcc_Inh))) %>%
+  mutate(mcc_Exc = Exc_Inh_ratio * sum_neuro_oligo) %>%
+  mutate(mcc_Inh = Inh_Exc_ratio * sum_neuro_oligo) %>%
+  dplyr::select(-c("mcc_Oligo", "mcc_Neuron", "mcc_Glial"))
+
+# Old adjustment which changed ALL CTPs
+# methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo <- methylcc_ctp_pheno_adjoligo.tmp$Exc + methylcc_ctp_pheno_adjoligo.tmp $Inh + methylcc_ctp_pheno_adjoligo.tmp$NonN_Astro_FGF3R + methylcc_ctp_pheno_adjoligo.tmp$NonN_Micro.Endo_TYROBP
+# methylcc_ctp_pheno_adjoligo.tmp$Exc <- methylcc_ctp_pheno_adjoligo.tmp$Exc/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+# methylcc_ctp_pheno_adjoligo.tmp$Inh <- methylcc_ctp_pheno_adjoligo.tmp$Inh/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+# methylcc_ctp_pheno_adjoligo.tmp$NonN_Astro_FGF3R <- methylcc_ctp_pheno_adjoligo.tmp$NonN_Astro_FGF3R/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+# methylcc_ctp_pheno_adjoligo.tmp$NonN_Micro.Endo_TYROBP <- methylcc_ctp_pheno_adjoligo.tmp$NonN_Micro.Endo_TYROBP/methylcc_ctp_pheno_adjoligo.tmp$sum_nonoligo
+
+methylcc_ctp_pheno_adjoligo.tmp$mcc_Neuron <- rowSums(methylcc_ctp_pheno_adjoligo.tmp[,neuron_n_mcc])
+methylcc_ctp_pheno_adjoligo.tmp$mcc_Glial <- rowSums(methylcc_ctp_pheno_adjoligo.tmp[,glial_rmoligo_n_mcc])
+
+if (write_out == TRUE) {
+  write.table(methylcc_ctp_pheno_adjoligo.tmp, paste(out_dir, "/methylcc_adjoligo_ctp_pheno.raw.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+```{r}
+
+methylcc_ctp_pheno_adjoligo.long <- melt(methylcc_ctp_pheno_adjoligo.tmp, measure.vars = c(all_of(neuron_n_mcc), all_of(glial_rmoligo_n_mcc), "mcc_Neuron", "mcc_Glial"), variable.name = "celltype", value.name = "CTP")
+methylcc_ctp_pheno_adjoligo.long$Level <- ifelse(methylcc_ctp_pheno_adjoligo.long$celltype %in% c("mcc_Neuron", "mcc_Glial"), "Level1", "Level2")
+methylcc_ctp_pheno_adjoligo.long$Region <- "PFC"
+methylcc_ctp_pheno_adjoligo.long$celltype <- gsub("mcc_", "", methylcc_ctp_pheno_adjoligo.long$celltype)
+
+methylcc_ctp_pheno_adjoligo.long %>% mutate(celltype = fct_reorder(celltype, match(celltype, rev(c("Exc", "Inh", "Astro", "Endo", "Micro", "OPC"))))) %>%
+ggplot(aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +   
+    facet_grid(Level~Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+## coefs_sub
+
+```{r}
+
+# - boxplot
+coefs_sub_ctp_pheno.tmp <- ctp_pheno %>% dplyr::select(c(all_of(keep_cols), "h_GLU", "h_GABA", "h_ASTRO", "h_ENDO", "h_MONO", "h_OPC", "h_OLIGO"))
+coefs_sub_ctp_pheno.tmp$neuron_sum <- coefs_sub_ctp_pheno.tmp$h_GABA + coefs_sub_ctp_pheno.tmp$h_GLU
+coefs_sub_ctp_pheno.tmp$glia_sum <- coefs_sub_ctp_pheno.tmp$h_ASTRO + coefs_sub_ctp_pheno.tmp$h_OPC + coefs_sub_ctp_pheno.tmp$h_OLIGO + coefs_sub_ctp_pheno.tmp$h_ENDO + coefs_sub_ctp_pheno.tmp$h_MONO
+
+if (write_out == TRUE) {
+  write.table(coefs_sub_ctp_pheno.tmp, paste(out_dir, "/coefs_sub_ctp_pheno.raw.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+```{r}
+
+coefs_sub_ctp_pheno.long <- melt(coefs_sub_ctp_pheno.tmp, measure.vars = c("h_GLU", "h_GABA", "h_ASTRO", "h_ENDO", "h_MONO", "h_OPC", "h_OLIGO", "neuron_sum", "glia_sum"), variable.name = "celltype", value.name = "CTP")
+coefs_sub_ctp_pheno.long$Level <- ifelse(coefs_sub_ctp_pheno.long$celltype %in% c("neuron_sum", "glia_sum"), "Level1", "Level2")
+coefs_sub_ctp_pheno.long$Region <- "PFC"
+
+ggplot(coefs_sub_ctp_pheno.long, aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +   
+    facet_grid(Level~Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+# Boxplots: clr-transformation (2 ways to handle zeros)
+
+- Justification: does it make sense to run an ANOVA on CTP ~ group, if the CTPs are related? 
+- Eg. what does variance analysis look like when the y-variable for each individual is non-independent?
+
+## houseman_seq
+
+### clr-transformation with z-compositions to deal with zeros
+
+- IDs go as columns, CTPs as rows for zCompositions cmultRepl(), and IDs as rows for the clr(?
+
+```{r}
+
+keep_pheno_col <- hseq_ctp_pheno.tmp %>% dplyr::select(all_of(keep_cols))
+hseq_ctp_pheno.tmp.clr <- as.matrix(hseq_ctp_pheno.tmp %>% dplyr::select(c(all_of(level2_cols))))
+
+# Apply zCompositions to empirically get the best replacement of zeros
+# - it looks like you have to transpose the matrix (with samples as columns) to do this properly (?)
+length(which(hseq_ctp_pheno.tmp.clr == 0)) # check there are no 0s
+check <- which(hseq_ctp_pheno.tmp.clr == 0, arr.ind = T)
+
+hseq_ctp_pheno.tmp.clr_t <- t(hseq_ctp_pheno.tmp.clr)
+
+if (length(which(hseq_ctp_pheno.tmp.clr == 0)) > 0) {
+  
+  check <- which(hseq_ctp_pheno.tmp.clr_t == 0, arr.ind = T)
+  hseq_ctp_pheno.tmp.clr0_t <- cmultRepl(hseq_ctp_pheno.tmp.clr_t, output = "p-counts")
+  hseq_ctp_pheno.tmp.clr0_t[check]
+
+} else {
+  
+  print("no zcompositions applied as no 0 values")
+  hseq_ctp_pheno.tmp.clr0_t <- hseq_ctp_pheno.tmp.clr_t
+  
+}
+
+# Perform clr-transform
+hseq_ctp_pheno.tmp.clr0.tr <- clr(t(hseq_ctp_pheno.tmp.clr_t))
+hseq_ctp_pheno.clr.zc <- data.frame(keep_pheno_col, hseq_ctp_pheno.tmp.clr0.tr)
+
+if (write_out == TRUE) {
+  write.table(hseq_ctp_pheno.clr.zc, paste(out_dir, "/hseq_ctp_pheno.clr.zc.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+**Make dataframe**
+
+```{r}
+
+hseq_ctp_pheno.clr.zc.long <- melt(hseq_ctp_pheno.clr.zc, measure.vars = c(all_of(level2_cols)), variable.name = "celltype", value.name = "CTP")
+#methylcc_ctp_pheno.clr.zc.long$Level <- ifelse(methylcc_ctp_pheno.clr.zc.long$celltype %in% c("neuron_sum", "glia_sum"), "Level1", "Level2")
+hseq_ctp_pheno.clr.zc.long$Region <- "PFC"
+
+```
+
+```{r}
+
+ggplot(hseq_ctp_pheno.clr.zc.long, aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +
+  coord_flip() + theme_bw() + xlab("")
+  ggtitle("zCompositions")
+    #facet_grid(Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+### clr-transformation with 1e-3 minimum
+
+- Justification: does it make sense to run an ANOVA on CTP ~ group, if the CTPs are related? 
+- Eg. what does variance analysis look like when the y-variable for each individual is non-independent?
+
+- N.B. IDs go as columns, CTPs as rows
+
+```{r}
+
+keep_pheno_col <- hseq_ctp_pheno.tmp %>% dplyr::select(all_of(keep_cols))
+hseq_ctp_pheno.tmp.clr <- as.matrix(hseq_ctp_pheno.tmp %>% dplyr::select(c(all_of(level2_cols))))
+
+# Make minimum CTP = 1e-3
+length(which(hseq_ctp_pheno.tmp.clr <= 1e-3)) # check there are no 0s
+hseq_ctp_pheno.tmp.clr0 <- hseq_ctp_pheno.tmp.clr
+hseq_ctp_pheno.tmp.clr0[which(hseq_ctp_pheno.tmp.clr0 <= 1e-3)] <- 1e-3
+
+# Perform clr-transform
+hseq_ctp_pheno.tmp.clr0.tr <- clr(hseq_ctp_pheno.tmp.clr0)
+hseq_ctp_pheno.clr.1e3 <- data.frame(keep_pheno_col, hseq_ctp_pheno.tmp.clr0.tr)
+
+if (write_out == TRUE) {
+  write.table(hseq_ctp_pheno.clr.1e3, paste(out_dir, "/hseq_ctp_pheno.clr.1e3.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+**Make dataframe**
+
+```{r}
+
+hseq_ctp_pheno.clr.1e3.long <- melt(hseq_ctp_pheno.clr.1e3, measure.vars = c(all_of(level2_cols)), variable.name = "celltype", value.name = "CTP")
+#methylcc_ctp_pheno.clr.zc.long$Level <- ifelse(methylcc_ctp_pheno.clr.zc.long$celltype %in% c("neuron_sum", "glia_sum"), "Level1", "Level2")
+hseq_ctp_pheno.clr.1e3.long$Region <- "PFC"
+
+```
+
+```{r}
+
+ggplot(hseq_ctp_pheno.clr.1e3.long, aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +
+  coord_flip() + theme_bw() + xlab("") +
+  ggtitle("Minimum value = 1e-3")
+    #facet_grid(Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+#### Adjust for oligodendrocyte proportion
+
+```{r}
+
+keep_pheno_col <- hseq_ctp_pheno_adjoligo.tmp %>% dplyr::select(all_of(keep_cols))
+hseq_ctp_pheno_adjoligo.tmp.clr <- as.matrix(hseq_ctp_pheno_adjoligo.tmp %>% dplyr::select(c(all_of(neuron_n), all_of(glial_rmoligo_n))))
+
+# Make minimum CTP = 1e-3
+length(which(hseq_ctp_pheno_adjoligo.tmp.clr <= 1e-3)) # check there are no 0s
+hseq_ctp_pheno_adjoligo.tmp.clr0 <- hseq_ctp_pheno_adjoligo.tmp.clr
+hseq_ctp_pheno_adjoligo.tmp.clr0[which(hseq_ctp_pheno_adjoligo.tmp.clr0 <= 1e-3)] <- 1e-3
+
+# Perform clr-transform
+hseq_ctp_pheno_adjoligo.tmp.clr0.tr <- clr(hseq_ctp_pheno_adjoligo.tmp.clr0)
+hseq_ctp_pheno_adjoligo.clr.1e3 <- data.frame(keep_pheno_col, hseq_ctp_pheno_adjoligo.tmp.clr0.tr)
+
+if (write_out == TRUE) {
+  write.table(hseq_ctp_pheno_adjoligo.clr.1e3, paste(out_dir, "/hseq_adjoligo_ctp_pheno.clr.1e3.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+}
+
+```
+
+**Make dataframe**
+
+```{r}
+
+hseq_ctp_pheno_adjoligo.clr.1e3.long <- melt(hseq_ctp_pheno_adjoligo.clr.1e3, measure.vars = c(all_of(neuron_n), all_of(glial_rmoligo_n)), variable.name = "celltype", value.name = "CTP")
+#methylcc_ctp_pheno.clr.zc.long$Level <- ifelse(methylcc_ctp_pheno.clr.zc.long$celltype %in% c("neuron_sum", "glia_sum"), "Level1", "Level2")
+hseq_ctp_pheno_adjoligo.clr.1e3.long$Region <- "PFC"
+
+```
+
+```{r}
+
+ggplot(hseq_ctp_pheno_adjoligo.clr.1e3.long, aes(x=celltype, y = CTP, fill = group)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(position = position_jitterdodge(.1),alpha=.3) +
+  coord_flip() + theme_bw() + xlab("") +
+  ggtitle("Minimum value = 1e-3")
+    #facet_grid(Region, scales='free', space = 'free_y') + coord_flip() + theme_bw() + xlab("")
+
+```
+
+# Model: per-cell-type, compare raw
+
+```{r}
+
+if (cellnum == 7) {
+  
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_Oligo, hseq_OPC) ~ group, data = hseq_ctp_pheno.tmp))
+
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_Oligo, hseq_OPC) ~ group + age + sex + Batch + PMI, data = hseq_ctp_pheno.tmp))
+
+} else if (cellnum == 9) {
+  
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_Oligo_MBP, NonN_OPC) ~ group, data = methylcc_ctp_pheno.tmp))
+
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_Oligo_MBP, NonN_OPC) ~ group + age + sex + Batch + PMI, data = methylcc_ctp_pheno.tmp))
+
+}
+
+```
+
+## Test aggregated sums
+
+```{r}
+
+summary(lm(hseq_Glial ~ group, data = ctp_pheno))
+summary(lm(mcc_Glial ~ group, data = ctp_pheno))
+summary(lm(h_NeuN_neg ~ group, data = ctp_pheno))
+
+summary(lm(hseq_Glial ~ group + age + sex + Batch + PMI, data = ctp_pheno))
+summary(lm(mcc_Glial ~ group + age + sex + Batch + PMI, data = ctp_pheno))
+summary(lm(h_NeuN_neg ~ group + age + sex + Batch + PMI, data = ctp_pheno))
+
+```
+
+## Adjust for oligodendrocyte proportion
+
+```{r}
+
+if (cellnum == 7) {
+
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_OPC) ~ group, data = hseq_ctp_pheno_adjoligo.tmp))
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_OPC) ~ group + age + sex + Batch + PMI, data = hseq_ctp_pheno_adjoligo.tmp))
+
+} else if (cellnum == 9) {
+  
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_OPC) ~ group, data = methylcc_ctp_pheno_adjoligo.tmp))
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_OPC) ~ group + age + sex + Batch + PMI, data = methylcc_ctp_pheno_adjoligo.tmp))
+
+}
+
+```
+
+# Model: per-cell-type, compare clr-transformed
+
+```{r}
+
+if (cellnum == 7) {
+
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_Oligo, hseq_OPC) ~ group, data = hseq_ctp_pheno.clr.1e3))
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_Oligo, hseq_OPC) ~ group + age + sex + Batch + PMI, data = hseq_ctp_pheno.clr.1e3))
+
+} else if (cellnum == 9) {
+  
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_Oligo_MBP, NonN_OPC) ~ group, data = methylcc_ctp_pheno.clr.1e3))
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_Oligo_MBP, NonN_OPC) ~ group + age + sex + Batch + PMI, data = methylcc_ctp_pheno.clr.1e3))
+
+}
+
+```
+
+## Adjust for oligodendrocyte proportion
+
+```{r}
+
+if (cellnum == 7) {
+
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_OPC) ~ group, data = hseq_ctp_pheno_adjoligo.clr.1e3))
+  summary(lm(cbind(hseq_Exc, hseq_Inh, hseq_Astro, hseq_Endo, hseq_Micro, hseq_OPC) ~ group + age + sex + Batch + PMI, data = hseq_ctp_pheno_adjoligo.clr.1e3))
+
+} else if (cellnum == 9) {
+  
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_OPC) ~ group, data = methylcc_ctp_pheno_adjoligo.clr.1e3))
+  summary(lm(cbind(Exc_upper, Exc_lower, Inh_MGE, Inh_CGE, NonN_Astro_FGF3R, NonN_Endo, NonN_Micro, NonN_OPC) ~ group + age + sex + Batch + PMI, data = methylcc_ctp_pheno_adjoligo.clr.1e3))
+
+}
+
+```
+
+# Model: per-cell-type, compare ratios between other CTPs and Inh
+
+- dealing with this directly as a ratio, so no need to do transform (what an alr would do anyway)
+
+```{r}
+
+hseq_ctp_pheno.tmp.clr0_ratio <- data.frame(hseq_ctp_pheno.tmp.clr0)
+hseq_ctp_pheno.tmp.clr0_ratio$exc_inh <- hseq_ctp_pheno.tmp.clr0_ratio$hseq_Exc/hseq_ctp_pheno.tmp.clr0_ratio$hseq_Inh
+
+hseq_ctp_pheno.tmp.clr0_ratio.df <- data.frame(keep_pheno_col, hseq_ctp_pheno.tmp.clr0_ratio)
+
+summary(lm(exc_inh ~ group, data = hseq_ctp_pheno.tmp.clr0_ratio.df))
+
+summary(lm(exc_inh ~ group + age + sex + Batch + BrainBank, data = hseq_ctp_pheno.tmp.clr0_ratio.df))
+
+```
+
+# Model: ALDEx2 for differential proportion
+
+- Documentation: https://www.bioconductor.org/packages/release/bioc/vignettes/ALDEx2/inst/doc/ALDEx2_vignette.pdf
+- Uses Bayesian sampling from a Dirichlet distribution to estimate underlying technical variation
+- Input count data, takes as given (requires integers, so rounded the back-derived count data)
+- --> infers technical variation (eg. sequencing the same sample again) multiple times using aldex.clr()
+    - aldex.clr(): recommend mc.samples >128 for t-test, >1000 for rigorous effect size calculations, >16 for ANOVA 
+- Outputs (see p10 of documentation):
+    - Tables
+        - we*: Welch's t-test
+        - wi*: Wilcoxon rank test
+        - *ep: expected p-value
+        - *eBH: expected BH-correction
+        - rab*: median clr value for a given group
+        - dif.btw: median difference in clr value between groups
+        - dif.win: median of largest difference in clr values within groups
+        - effect: median effect size (diff.btw/max(diff.win))
+        - overlap: prop of effect size that overlaps 0 (ie. no effect)
+    - Plots 
+        - relationships between Abundance (clr) vs Difference + Dispersion vs Difference
+        - red denotes differentially abundant with q < 0.1, grey abundant but not differentially-abundant, black are rare but not differentially abundant)
+
+## houseman_seq
+
+### No covariates
+
+```{r}
+
+conds <- hseq_ctp_pheno.clr.1e3$group
+
+aldex_in <- sapply(data.frame(t(hseq_ctp_pheno.tmp[,c(all_of(level2_cols))])*10000), as.integer)
+rownames(aldex_in) <- level2_cols
+colnames(aldex_in) <- hseq_ctp_pheno.tmp$IID
+
+x <- aldex.clr(aldex_in, conds, mc.samples=128, denom="all", verbose=F)
+
+x.tt <- aldex.ttest(x, paired.test = F)
+
+x.effect <- aldex.effect(x, verbose = F)
+
+x.all <- data.frame(x.tt, x.effect)
+
+tmp <- rownames(x.all)
+x.all <- as.data.frame(sapply(x.all, function(x) signif(x, 2)))
+rownames(x.all) <- tmp
+
+datatable(x.all)
+
+par(mfrow=c(1,2))
+aldex.plot(x.all, type="MA", test="welch", xlab="Log-ratio abundance",ylab="Difference")
+aldex.plot(x.all, type="MW", test="welch", xlab="Dispersion",ylab="Difference")
+
+```
+
+
+### glm + covariates
+
+- Runs a glm
+- Input model matrix
+
+```{r, message = F}
+
+conds <- hseq_ctp_pheno.tmp$group
+cov.aldex <- methylcc_ctp_pheno.tmp %>% dplyr::select(c("group", "age", "sex", "Batch", "BrainBank"))
+mm <- model.matrix(~., cov.aldex)
+
+x <- aldex.clr(aldex_in, mm, mc.samples=128, denom="all", verbose=F)
+
+x.glm <- aldex.glm(x, mm)
+
+x.all2 <- data.frame(x.glm)
+
+tmp <- rownames(x.all2)
+x.all2 <- as.data.frame(sapply(x.all2, function(x) signif(x, 2)))
+rownames(x.all2) <- tmp
+
+datatable(x.all2)
+
+```
+
+# Model: ANCOM for differential proportion
+
+## methylCC
+
+### Prep
+
+```{r}
+
+# Prepare data
+metadata <- hseq_ctp_pheno.tmp %>% dplyr::select(c("IID", "group", "age", "sex", "Batch", "BrainBank"))
+rownames(metadata) <- metadata$IID
+metadata$group <- as.factor(metadata$group)
+
+ancom_features <- t(hseq_ctp_pheno.tmp[,c(level2_cols)])*10000
+colnames(ancom_features) <- hseq_ctp_pheno.tmp$IID
+ancom_features <- ancom_features[,which(colnames(ancom_features) %in% metadata$IID)]
+
+# Check variables in the correct order
+identical(colnames(ancom_features), metadata$IID)
+
+ancom_table <- feature_table_pre_process(ancom_features, metadata, "IID", group_var = NULL, out_cut = 0.05, zero_cut = 0.90, lib_cut = 10, neg_lb)
+
+```
+
+### Case-control analysis with no covariates
+
+```{r}
+
+# Run tests with covariates (age + sex + diet)
+ancom_out_nocov <- ANCOM(ancom_table$feature_table, ancom_table$meta_data, ancom_table$structure_zeros, main_var = "group", p_adj_method = "BH")
+
+ancom_out_nocov$out <- ancom_out_nocov$out[order(ancom_out_nocov$out$W, decreasing = T),]
+
+datatable(ancom_out_nocov$out)
+
+ancom_out_nocov$fig
+
+```
+
+### Case-control analysis with covariates
+
+```{r}
+
+# Run tests with covariates (age + sex + diet)
+ancom_out_cov <- ANCOM(ancom_table$feature_table, ancom_table$meta_data, ancom_table$structure_zeros, main_var = "group", p_adj_method = "BH", adj_formula = "age + sex + Batch + BrainBank")
+
+ancom_out_cov$out <- ancom_out_cov$out[order(ancom_out_cov$out$W, decreasing = T),]
+
+datatable(ancom_out_cov$out)
+
+ancom_out_cov$fig
+
+```
+
+# Correlation plots
+
+```{r}
+
+cov_var <- c("IID", "group", "age", "sex", "Batch", "BrainBank")
+
+```
+
+## Glial
+
+### Aggregated
+
+- eBayes + Houseman (coefs_brain): h_NeuN_neg
+- methylCC (summed): Glial
+- smartSVA: sSV1
+- eBayes + Houseman (summed coefs_sub): h_Glial
+- + include methylCC oligo since it seems to go together ...
+
+```{r}
+
+neunn <- ctp_pheno %>% dplyr::select(c(all_of(cov_var), "h_NeuN_neg", "hseq_Glial", "mcc_Glial", "sSV1", "sSV2", "h_Glial", "hseq_Oligo", "hseq_OPC", "mcc_Oligo", "mcc_OPC", "h_OLIGO", "h_OPC", "celfie_Glial", "celfie_Oligo", "celfie_OPC", "VAEe3", "VAEe9"))
+
+# y = h_NeuN_neg
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "h_NeuN_neg"), measure.var = c("hseq_Glial", "mcc_Glial", "h_Glial", "celfie_Glial", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=h_NeuN_neg)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: hseq_Glial
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "hseq_Glial"), measure.var = c("h_NeuN_neg", "mcc_Glial", "h_Glial", "celfie_Glial", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=hseq_Glial)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: mcc_Glial
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "mcc_Glial"), measure.var = c("h_NeuN_neg", "hseq_Glial", "h_Glial", "celfie_Glial", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=mcc_Glial)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: h_Glial
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "h_Glial"), measure.var = c("h_NeuN_neg", "hseq_Glial", "mcc_Glial", "celfie_Glial", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=h_Glial)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: celfie_Glial
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "celfie_Glial"), measure.var = c("h_NeuN_neg", "hseq_Glial", "mcc_Glial", "h_Glial", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=celfie_Glial)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: sSV1
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "sSV1"), measure.var = c("h_NeuN_neg", "hseq_Oligo", "mcc_Oligo", "h_OLIGO", "celfie_Oligo", "VAEe9"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=sSV1)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: sSV1
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "sSV1"), measure.var = c("h_NeuN_neg", "hseq_Glial", "mcc_Glial", "h_Glial", "celfie_Glial", "hseq_Oligo", "hseq_OPC", "mcc_Oligo", "mcc_OPC", "h_OLIGO", "h_OPC", "celfie_Oligo", "celfie_OPC", "VAEe9"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=sSV1)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: VAEe9
+neunn.long <- melt(neunn, id.var = c(all_of(cov_var), "VAEe9"), measure.var = c("h_NeuN_neg", "hseq_Oligo", "mcc_Oligo", "h_OLIGO", "celfie_Oligo", "sSV1"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunn.long, aes(x=CTP, y=VAEe9)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = FALSE) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+```
+
+### Compare individual glial sub-type CTPs
+
+```{r, fig.height = 10, fig.width = 8, message = F, warning = F}
+
+# Comparison between houseman extremes vs eBayes
+ctp_pheno_sub_glial <- data.frame(ctp_pheno[,c("hseq_Glial", "hseq_Astro", "hseq_Endo", "hseq_Micro", "hseq_Oligo", "hseq_OPC", "h_NeuN_neg", "h_Glial", "h_ASTRO", "h_ENDO", "h_MONO", "h_OLIGO", "h_OPC")])
+
+ggpairs(ctp_pheno_sub_glial)
+
+# Comparison between houseman extremes vs methylCC extremes
+ctp_pheno_sub_glial <- data.frame(ctp_pheno[,c("hseq_Glial", "hseq_Astro", "hseq_Endo", "hseq_Micro", "hseq_Oligo", "hseq_OPC", "h_NeuN_neg", "h_Glial", "h_ASTRO", "h_ENDO", "h_MONO", "h_OLIGO", "h_OPC")])
+
+ggpairs(ctp_pheno_sub_glial)
+
+# Comparison between houseman extremes vs CelFIE
+ctp_pheno_sub_glial <- data.frame(ctp_pheno[,c("hseq_Glial", "hseq_Astro", "hseq_Endo", "hseq_Micro", "hseq_Oligo", "hseq_OPC", "h_NeuN_neg", "celfie_Glial", "celfie_Astro", "celfie_Endo", "celfie_Micro", "celfie_Oligo", "celfie_OPC")])
+
+ggpairs(ctp_pheno_sub_glial)
+
+# Comparison between houseman array vs methylCC extremes
+ctp_pheno_sub_glial <- data.frame(ctp_pheno[,c("h_Glial", "h_ASTRO", "h_ENDO", "h_MONO", "h_OLIGO", "h_OPC", "h_NeuN_neg", "mcc_Glial", "mcc_Astro", "mcc_Endo", "mcc_Micro", "mcc_Oligo", "mcc_OPC")])
+
+ggpairs(ctp_pheno_sub_glial)
+
+```
+
+## Neuronal 
+
+### Aggregated
+
+```{r}
+
+# Select columns
+neunp <- ctp_pheno %>% dplyr::select(c(all_of(cov_var), "h_NeuN_pos", "hseq_Neuron", "mcc_Neuron", "h_Neuron", "celfie_Neuron", "sSV1", "VAEe3"))
+
+# y: h_NeuN_pos
+neunp.long <- melt(neunp, id.var = c(all_of(cov_var), "h_NeuN_pos"), measure.var = c("hseq_Neuron", "mcc_Neuron", "h_Neuron", "celfie_Neuron", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunp.long, aes(x=CTP, y=h_NeuN_pos)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = F) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: hseq_Neuron
+neunp.long <- melt(neunp, id.var = c(all_of(cov_var), "hseq_Neuron"), measure.var = c("h_NeuN_pos", "mcc_Neuron", "h_Neuron", "celfie_Neuron", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunp.long, aes(x=CTP, y=hseq_Neuron)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = F) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: mcc_Neuron
+neunp.long <- melt(neunp, id.var = c(all_of(cov_var), "mcc_Neuron"), measure.var = c("h_NeuN_pos", "hseq_Neuron", "h_Neuron", "celfie_Neuron", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunp.long, aes(x=CTP, y=mcc_Neuron)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = F) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: h_Neuron
+neunp.long <- melt(neunp, id.var = c(all_of(cov_var), "h_Neuron"), measure.var = c("h_NeuN_pos", "hseq_Neuron", "mcc_Neuron", "celfie_Neuron", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunp.long, aes(x=CTP, y=h_Neuron)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = F) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: celfie_Neuron
+neunp.long <- melt(neunp, id.var = c(all_of(cov_var), "celfie_Neuron"), measure.var = c("h_NeuN_pos", "hseq_Neuron", "mcc_Neuron", "h_Neuron", "sSV1", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunp.long, aes(x=CTP, y=celfie_Neuron)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = F) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: sSV1
+neunp.long <- melt(neunp, id.var = c(all_of(cov_var), "sSV1"), measure.var = c("h_NeuN_pos", "hseq_Neuron", "mcc_Neuron", "h_Neuron", "celfie_Neuron", "VAEe3"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunp.long, aes(x=CTP, y=sSV1)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = F) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+# y: VAEe3
+neunp.long <- melt(neunp, id.var = c(all_of(cov_var), "VAEe3"), measure.var = c("h_NeuN_pos", "hseq_Neuron", "mcc_Neuron", "h_Neuron", "celfie_Neuron", "sSV1"), variable.name = c("method"), value.name = "CTP")
+ggplot(neunp.long, aes(x=CTP, y=VAEe3)) + geom_point(aes(colour = age)) + scale_colour_viridis(discrete = F) + geom_smooth(method = "lm") + facet_wrap(~method, scales = "free_x")
+
+```
+
+### Compare individual neuronal sub-type CTPs
+
+```{r, fig.height = 10, fig.width = 8, message = F, warning = F}
+
+if (cellnum == 7) {
+  ctp_pheno_sub_neuron <- data.frame(ctp_pheno[,c("hseq_Neuron", "hseq_Exc", "hseq_Inh", "h_Neuron", "h_GLU", "h_GABA", "mcc_Neuron", "mcc_Exc", "mcc_Inh", "h_NeuN_pos")])
+
+} else if (cellnum == 9) {
+  ctp_pheno_sub_neuron <- data.frame(ctp_pheno[,c("Neuron", "Exc_upper", "Exc_lower", "Inh_MGE", "Inh_CGE", "h_NeuN_pos", "h_Neuron", "h_GABA", "h_GLU")])
+}
+
+ggpairs(ctp_pheno_sub_neuron)
+
+```
+
+## All together
+
+```{r}
+
+ctp_pheno_sub <- data.frame(ctp_pheno[,c("hseq_Exc", "hseq_Inh", "hseq_Astro", "hseq_Endo", "hseq_Micro", "hseq_Oligo", "hseq_OPC", "h_GLU", "h_GABA", "h_ASTRO", "h_ENDO", "h_MONO", "h_OLIGO", "h_OPC")])
+
+#svg(paste(out_dir, "/", filen, "_ctp_hseq_harray_cor_matrix.svg", sep = ""), height = 6, width = 6)
+jpeg(paste(out_dir, "/", filen, "_ctp_hseq_harray_cor_matrix.jpeg", sep = ""), height = 600, width = 600, quality = 100)
+g <- ggduo(ctp_pheno_sub, colnames(ctp_pheno_sub)[1:7], colnames(ctp_pheno_sub)[8:14], xlab = "Houseman + sequencing reference", ylab = "Houseman + array reference", title = "UCLA_ASD")
+print(g)
+dev.off()
+
+```
+
+## Unsupervised comparison
+
+### Neurons
+
+```{r, fig.height = 10, fig.width = 8, message = F, warning = F}
+
+if (cellnum == 7) {
+  ctp_pheno_sv_neuron <- data.frame(ctp_pheno[,c("h_NeuN_pos", "hseq_Neuron", "hseq_Exc", "hseq_Inh", "sSV1", "sSV2", "sSV3", "sSV4", "sSV5", "sSV6", "sSV7", "sSV8")])
+} else if (cellnum == 9) {
+  ctp_pheno_sv_neuron <- data.frame(ctp_pheno[,c("h_NeuN_pos", "Neuron", "Exc_upper", "Exc_lower", "Inh_MGE", "Inh_CGE", "sSV1", "sSV2", "sSV3", "sSV4", "sSV5", "sSV6", "sSV7", "sSV8")])
+}
+
+ggpairs(ctp_pheno_sv_neuron)
+
+```
+
+### Glial
+
+```{r, fig.height = 10, fig.width = 8, message = F, warning = F}
+
+ctp_pheno_sv_glial <- data.frame(ctp_pheno[,c("h_NeuN_neg", "hseq_Glial", "hseq_Astro", "hseq_Endo", "hseq_Micro", "hseq_Oligo", "hseq_OPC", "sSV1", "sSV2", "sSV3", "sSV4", "sSV5", "sSV6", "sSV7", "sSV8")])
+
+ggpairs(ctp_pheno_sv_glial)
+
+```
+
+# For presentations
+
+```{r, fig.height = 6, fig.width = 6}
+
+# For presentations
+ggplot(neunn, aes(x = sSV1, y = hseq_Oligo)) + geom_point() + geom_smooth(method = "lm") + xlab("smartSV1 (reference-free)") + ylab("Houseman (seq) Oligo proportion")
+ggsave(paste(out_dir, "/hseqOligo_vs_smartSV1.png", sep = ""), height = 4, width = 4)
+ggplot(neunn, aes(x = h_NeuN_neg, y = hseq_Glial)) + geom_point() + geom_smooth(method = "lm") + xlab("NeuN_neg proportion (reference-based)") + ylab("Sum of Houseman (seq) Glial proportions")
+ggsave(paste(out_dir, "/NeuN_neg_vs_hseqGlial.png", sep = ""), height = 4, width = 4)
+
+```

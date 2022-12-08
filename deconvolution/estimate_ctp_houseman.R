@@ -119,6 +119,8 @@ library(dplyr)
 # Bulk data directory (DNA methylation beta matrix, batch corrected)
 #------------------------------------------------------------------------------
 
+input <- "txt"
+
 # Jaffe
 data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/Jaffe2018/analysis"
 filen <- "Jaffe2018_age0_aut_mask_t"
@@ -134,6 +136,12 @@ data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ROSMAP/analysis"
 filen <- "ROSMAP_aut_mask_t"
 meth_dir <- paste(data_dir, "/", filen, ".txt", sep = "")
 
+# BDR AZD
+input <- "rdat"
+data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/BDR_DNAm_AZD_HannonMills"
+filen <- "BDR_DNAm_FINAL"
+meth_dir <- paste(data_dir, "/", filen, ".rdat", sep = "")
+
 #------------------------------------------------------------------------------
 # Reference data directory
 #------------------------------------------------------------------------------
@@ -146,10 +154,18 @@ coefs_seq_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020
 #------------------------------------------------------------------------------
 
 # Methylation data: read-in + format
-meth.tmp <- fread(meth_dir)
-meth <- as.matrix(meth.tmp[,2:ncol(meth.tmp)])
-rownames(meth) <- data.frame(meth.tmp)[,1]
-meth <- meth[order(rownames(meth)),]
+if (input == "txt") {
+
+    meth.tmp <- fread(meth_dir)
+    meth <- as.matrix(meth.tmp[,2:ncol(meth.tmp)])
+    rownames(meth) <- data.frame(meth.tmp)[,1]
+    meth <- meth[order(rownames(meth)),]
+
+} else if (input == "rdat") {
+
+    load(meth_dir)
+    meth <- betas
+}
 
 # Reference probes, order, and overlap with methylation matrix
 # Formatted as a list here, as it gives flexibility to deconvolve 
@@ -193,4 +209,4 @@ ctp_seq.gg <- ctp_seq.long.df %>%
         theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1)) +
         facet_wrap(~comparison) +
         geom_hline(yintercept = 0.1, linetype = "dashed", color = "gray20")
-ggsave(paste(data_dir, "/", filen, "_Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_houseman_ls.png", sep = ""), ctp_mcc.gg)
+ggsave(paste(data_dir, "/", filen, "_Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_houseman_ls.png", sep = ""), ctp_seq.gg)

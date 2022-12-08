@@ -1,0 +1,391 @@
+---
+title: "brain CTP ctp differences, AZD replication"
+author: "Chloe Yap"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+---
+
+**To run**: Beforehand:
+
+    module load pandoc
+
+In R:
+
+```{r, eval = FALSE}
+setwd("~/shared-gandalm/brain_CTP/Scripts/integration/ctp_differences")
+rmarkdown::render("ctp_differences_replication_BDR.Rmd", "html_document")
+```
+
+# Set-up
+
+## Directories and libraries
+
+```{r}
+
+library(data.table)
+library(dplyr)
+library(compositions)
+library(tidyverse)
+library(broom)
+library(ggrepel)
+library(wesanderson)
+library(DT)
+
+```
+
+```{r}
+
+azd_bdr_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/BDR_DNAm_AZD_HannonMills/BDR_DNAm_FINAL_Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_houseman_ls.rds"
+
+azd_bdr_pheno <- "~/shared-gandalm/brain_CTP/Data/pheno/BDR_DNAm_AZD_HannonMills/BDR_DNAm_FINAL.pheno"
+
+```
+
+## Read-in
+
+```{r}
+
+# All CTPs
+azd_bdr <- readRDS(azd_bdr_dir)[[1]]
+colnames(azd_bdr)[which(colnames(azd_bdr) == "IID")] <- "Basename"
+colnames(azd_bdr) <- gsub("NonN_", "", colnames(azd_bdr))
+colnames(azd_bdr) <- unlist(lapply(strsplit(colnames(azd_bdr), "_"), function(x) x[1]))
+
+azd_bdr_pheno <- fread(azd_bdr_pheno)
+azd_bdr_pheno_pfc <- azd_bdr_pheno %>% filter(BR == "Prefrontal")
+
+```
+
+## Apply clr
+
+- N.B. with this package, IDs go as columns, CTPs as rows (unlike logratio.transfo)
+
+```{r}
+
+azd_bdr.tmp <- as.matrix(azd_bdr %>% dplyr::select(-c("Basename", "error")))
+length(which(azd_bdr.tmp == 0)) # check there are no 0s
+min(azd_bdr.tmp)
+
+azd_bdr.clr <- data.frame(t(clr(t(azd_bdr.tmp))))
+azd_bdr.clr$Basename <- rownames(azd_bdr.clr)
+
+```
+
+## Join datasets
+
+```{r}
+
+azd_bdr_ctp_pheno <- inner_join(azd_bdr, azd_bdr_pheno_pfc, by = "Basename")
+azd_bdr_ctp_pheno.clr <- inner_join(azd_bdr.clr, azd_bdr_pheno_pfc, by = "Basename")
+
+```
+
+## Add 'composite' CTPs
+
+```{r}
+
+azd_bdr_ctp_pheno$Neuron <- azd_bdr_ctp_pheno$Exc + azd_bdr_ctp_pheno$Inh
+azd_bdr_ctp_pheno$Glia_NonOligo <- azd_bdr_ctp_pheno$Astro + azd_bdr_ctp_pheno$Endo + azd_bdr_ctp_pheno$Micro + azd_bdr_ctp_pheno$OPC
+
+```
+
+# AZD pheno: Braak
+
+```{r}
+
+table(azd_bdr_ctp_pheno$BraakTangle_numeric)
+ggplot(azd_bdr_ctp_pheno, aes(x = BraakTangle_numeric)) + 
+  geom_histogram() +
+  theme_bw()
+
+```
+
+# Plot of CTPs
+
+```{r}
+
+```
+
+# Check against previously deconvolved CTPs
+
+```{r}
+
+ggplot(azd_bdr_ctp_pheno, aes(x = Neuron, y = NeuN)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+cor.test(azd_bdr_ctp_pheno$Neuron, azd_bdr_ctp_pheno$NeuN)
+
+ggplot(azd_bdr_ctp_pheno, aes(x = Oligo, y = Sox10)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+cor.test(azd_bdr_ctp_pheno$Oligo, azd_bdr_ctp_pheno$Sox10)
+
+ggplot(azd_bdr_ctp_pheno, aes(x = Glia_NonOligo, y = Double)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+cor.test(azd_bdr_ctp_pheno$Glia_NonOligo, azd_bdr_ctp_pheno$Double)
+
+```
+
+# Replicate ENDO
+
+## clr transform
+
+```{r}
+
+summary(lm(Endo ~ BraakTangle_numeric, data = azd_bdr_ctp_pheno.clr))
+summary(lm(Endo ~ BraakTangle_numeric + Age + Age^2 + Gender + Plate, data = azd_bdr_ctp_pheno.clr))
+
+ggplot(azd_bdr_ctp_pheno.clr, aes(x = BraakTangle_numeric, y = Endo)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+ggplot(azd_bdr_ctp_pheno.clr, aes(x = BraakTangle_numeric, y = Endo, colour = Age)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw() +
+  facet_grid(~ Gender)
+
+pal <- wes_palette("Zissou1", 21, type = "continuous")
+ggplot(azd_bdr_ctp_pheno.clr %>% mutate(age = Age), aes(x = BraakTangle_numeric, y = Endo, colour = age)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_colour_gradientn(colours = pal) +
+  theme_bw() +
+  labs(title = "BDR (AZD)", x ="Braak", y = "Endo (clr-transform)")
+
+```
+
+## no clr transform
+
+```{r}
+
+summary(lm(Endo ~ BraakTangle_numeric, data = azd_bdr_ctp_pheno))
+summary(lm(Endo ~ BraakTangle_numeric + Age + Age^2 + Gender + Plate, data = azd_bdr_ctp_pheno))
+
+ggplot(azd_bdr_ctp_pheno, aes(x = BraakTangle_numeric, y = Endo)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+ggplot(azd_bdr_ctp_pheno, aes(x = BraakTangle_numeric, y = Endo, fill = Age)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw() +
+  facet_grid(~ Gender)
+
+```
+
+# Replicate Exc and Inh shifts
+
+```{r}
+
+summary(lm(Exc ~ BraakTangle_numeric, data = azd_bdr_ctp_pheno.clr))
+summary(lm(Exc ~ BraakTangle_numeric + Age + Age^2 + Gender + Plate, data = azd_bdr_ctp_pheno.clr))
+
+summary(lm(Inh ~ BraakTangle_numeric, data = azd_bdr_ctp_pheno.clr))
+summary(lm(Inh ~ BraakTangle_numeric + Age + Age^2 + Gender + Plate, data = azd_bdr_ctp_pheno.clr))
+
+```
+
+# Full analysis
+
+```{r}
+
+tidy_df_nocov_azd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ BraakTangle_numeric, data = azd_bdr_ctp_pheno.clr), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")  %>% mutate(study = "BDR_AZD")
+
+tidy_df_cov_azd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ BraakTangle_numeric + Age + Age^2 + Gender + Plate, data = azd_bdr_ctp_pheno.clr), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")  %>% mutate(study = "BDR_AZD")
+
+```
+
+## Coefficients
+
+```{r}
+
+datatable(tidy_df_nocov_azd)
+datatable(tidy_df_cov_azd)
+
+```
+
+## Extract diagnosis effect
+
+### Adjusted for covariates
+
+```{r}
+
+tidy_df_cov_all_dx <- tidy_df_cov_azd %>% filter(grepl("BraakTangle_numeric", term))
+
+# Add label
+tidy_df_cov_all_dx$lab <- ifelse(tidy_df_cov_all_dx$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_all_dx$estimate) < 0.001, formatC(tidy_df_cov_all_dx$estimate, format = "e", digits = 2), round(tidy_df_cov_all_dx$estimate, 3)), ", ", 
+  "p=", ifelse(tidy_df_cov_all_dx$p.value < 0.001, formatC(tidy_df_cov_all_dx$p.value, format = "e", digits = 2), round(tidy_df_cov_all_dx$p.value, 3)), ", ", 
+  "df=", tidy_df_cov_all_dx$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_all_dx$celltype <- tidy_df_cov_all_dx$response
+
+# Change diagnosis name
+tidy_df_cov_all_dx$dx <- gsub("BraakTangle_numeric", "", tidy_df_cov_all_dx$term)
+tidy_df_cov_all_dx$variable <- "Braak_scale"
+
+# Specific order
+tidy_df_cov_all_dx$MatchCell <- match(tidy_df_cov_all_dx$celltype, unique(tidy_df_cov_all_dx$celltype))
+tidy_df_cov_all_dx$MatchTerm <- match(tidy_df_cov_all_dx$term, unique(tidy_df_cov_all_dx$term))
+#tidy_df_cov_all_dx$MatchStudy <- match(tidy_df_cov_all_dx$study, c("ASDbrain (ASD)", "LIBD (SCZ)", "ROSMAP (AZD)"))
+
+# Plot
+tidy_df_cov_all_dx %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  #mutate(study = fct_reorder(study, MatchStudy)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(4)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_grid(variable ~ study)
+
+ggsave("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/BDR_AZD_lm_ctp_clr1e-3_dx_cov_all.png", height = 3.5, width = 3)
+ggsave("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/BDR_AZD_lm_ctp_clr1e-3_dx_cov_all.svg", height = 3.5, width = 3)
+
+```
+
+# Check ROSMAP severity stage (vs diagnosis)
+
+## Read in and clean
+
+```{r}
+
+houseman_seq_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ROSMAP/analysis/ROSMAP_aut_mask_t_Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_houseman_ls.rds"
+pheno_dir <- "~/shared-gandalm/brain_CTP/Data/pheno/ROSMAP/pheno_ROSMAP.txt"
+
+pheno <- read.delim(pheno_dir, header = T, as.is = T)
+colnames(pheno)[which(colnames(pheno) == "individualID")] <- "IID"
+colnames(pheno)[which(colnames(pheno) == "age_death")] <- "age"
+pheno$age[which(pheno$age == "90+")] <- 90
+pheno$age <- as.numeric(pheno$age)
+colnames(pheno)[which(colnames(pheno) == "msex")] <- "sex"
+pheno$sex <- ifelse(pheno$sex == 1, "M", "F")
+pheno$batch <- as.factor(pheno$batch)
+pheno$group <- ifelse(pheno$cogdx %in% 4:5, "AZD", "CTL")
+
+# sequencing + Houseman
+houseman_seq.ls <- readRDS(houseman_seq_dir)
+houseman_seq <- houseman_seq.ls[[1]]
+ind <- grep("NonN", colnames(houseman_seq))
+foo <- colnames(houseman_seq)[ind]
+foo2 <- unlist(lapply(strsplit(gsub("NonN_", "", foo), "_"), function(x) x[1]))
+colnames(houseman_seq)[ind] <- foo2
+
+```
+
+## Apply clr
+
+- N.B. with this package, IDs go as columns, CTPs as rows (unlike logratio.transfo)
+
+```{r}
+
+azd_rosmap.tmp <- as.matrix(houseman_seq %>% dplyr::select(-c("IID", "error")))
+length(which(azd_rosmap.tmp == 0)) # check there are no 0s
+min(azd_rosmap.tmp)
+
+azd_rosmap.clr <- data.frame(t(clr(t(azd_rosmap.tmp))))
+azd_rosmap.clr$IID <- rownames(azd_rosmap.clr)
+
+```
+
+## Join datasets
+
+```{r}
+
+azd_rosmap_ctp_pheno.clr <- inner_join(azd_rosmap.clr, pheno, by = "IID")
+
+```
+
+## Association between ENDO and AZD measures
+
+### Braak score
+
+```{r}
+
+table(azd_rosmap_ctp_pheno.clr$braaksc)
+ggplot(azd_rosmap_ctp_pheno.clr, aes(x = braaksc)) + 
+  geom_histogram() +
+  theme_bw()
+
+```
+
+```{r}
+
+summary(lm(Endo ~ braaksc, data = azd_rosmap_ctp_pheno.clr))
+summary(lm(Endo ~ braaksc + age + age^2 + sex + batch, data = azd_rosmap_ctp_pheno.clr))
+
+pal <- wes_palette("Zissou1", 21, type = "continuous")
+ggplot(azd_rosmap_ctp_pheno.clr, aes(x = braaksc, y = Endo, colour = age)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_colour_gradientn(colours = pal) +
+  theme_bw() +
+  labs(title = "ROSMAP (AZD)", x ="Braak", y = "Endo (clr-transform)")
+
+```
+
+### Cognitive dx
+
+```{r}
+
+summary(lm(Endo ~ cogdx + age + age^2 + sex + batch, data = azd_rosmap_ctp_pheno.clr))
+
+```
+
+### Compare with original association with cogdx
+
+```{r}
+
+summary(lm(Endo ~ group + age + age^2 + sex + batch, data = azd_rosmap_ctp_pheno.clr))
+
+```
+
+# Plot output
+
+```{r}
+
+bdr.tmp <- azd_bdr_ctp_pheno.clr %>% mutate(study = "BDR") %>% dplyr::select(c("Endo", "BraakTangle_numeric", "Age", "study"))
+colnames(bdr.tmp) <- c("Endo", "Braak", "age", "study")
+
+rosmap.tmp <- azd_rosmap_ctp_pheno.clr %>% mutate(study = "ROSMAP") %>% dplyr::select(c("Endo", "braaksc", "age", "study"))
+colnames(rosmap.tmp) <- c("Endo", "Braak", "age", "study")
+
+bdr_rosmap.tmp <- rbind(bdr.tmp, rosmap.tmp)
+
+pal <- wes_palette("Zissou1", 21, type = "continuous")
+
+ggplot(bdr_rosmap.tmp, aes(x = Braak, y = Endo, colour = age)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_colour_gradientn(colours = pal) +
+  theme_bw() +
+  labs(x ="Braak", y = "Endo (clr-transform)") +
+  facet_grid(~ study)
+
+ggsave(paste("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences", "/azd_replication_bdr_braak", ".png", sep = ""), bg = "transparent", height = 3, width = 5)
+ggsave(paste("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences", "/azd_replication_bdr_braak", ".svg", sep = ""), bg = "transparent", height = 3, width = 5)
+
+```

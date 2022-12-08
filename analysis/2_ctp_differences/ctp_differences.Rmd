@@ -1,0 +1,1862 @@
+---
+title: "CTP differences"
+author: "Chloe Yap"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+---
+
+**To run**: Beforehand:
+
+    module load pandoc
+
+In R:
+
+```{r, eval = FALSE}
+setwd("~/shared-gandalm/brain_CTP/Scripts/integration/ctp_differences")
+rmarkdown::render("ctp_differences.Rmd", "html_document")
+```
+
+# Set-up
+
+## Directories and libraries
+
+```{r}
+
+library(tidyverse)
+library(rmarkdown)    # You need this library to run this template.
+library(epuRate)      # Install with remotes::install_github("holtzy/epuRate", force=TRUE) - use this instead of devtools::install_github()
+library(reshape2)
+library(compositions)
+library(wesanderson)
+
+library(rms)
+library(lmtest)
+library(ashr)
+library(mashr)
+library(broom)
+
+```
+
+```{r}
+
+study <- "Jaffe2018"
+data_dir <- paste("~/shared-gandalm/brain_CTP/Data/methylation/", study, "/analysis", sep = "")
+filen <- "Jaffe2018_age0"
+scz_dir <- paste(data_dir, "/", filen, "_ctp_pheno.txt", sep = "")
+scz_adjoligo_dir <- paste(data_dir, "/", "hseq_adjoligo_ctp_pheno.raw.txt", sep = "")
+
+study <- "ASD_methylation_brain"
+data_dir <- paste("~/shared-gandalm/brain_CTP/Data/methylation/", study, "/analysis", sep = "")
+filen <- "KCL_R01MH094714_ASD_Illumina450K_PFC"
+asd_dir <- paste(data_dir, "/", filen, "_ctp_pheno.txt", sep = "")
+asd_adjoligo_dir <- paste(data_dir, "/", "hseq_adjoligo_ctp_pheno.raw.txt", sep = "")
+
+study <- "ROSMAP"
+data_dir <- paste("~/shared-gandalm/brain_CTP/Data/methylation/", study, "/analysis", sep = "")
+#filen <- "ROSMAP_ComBatplate_neg0"
+filen <- "ROSMAP"
+azd_dir <- paste(data_dir, "/", filen, "_ctp_pheno.txt", sep = "")
+azd_adjoligo_dir <- paste(data_dir, "/", "hseq_adjoligo_ctp_pheno.raw.txt", sep = "")
+
+out_dir <- "~/shared-gandalm/brain_CTP/Data/integration/ctp_differences"
+
+```
+
+## Read-in data
+
+### All CTPs
+
+```{r}
+
+# All CTPs
+scz <- read.delim(scz_dir, header = T, as.is = T)
+asd <- read.delim(asd_dir, header = T, as.is = T)
+azd <- read.delim(azd_dir, header = T, as.is = T)
+
+# Adjust for oligodendrocytes
+scz_adjoligo <- read.delim(scz_adjoligo_dir, header = T, as.is = T)
+asd_adjoligo <- read.delim(asd_adjoligo_dir, header = T, as.is = T)
+azd_adjoligo <- read.delim(azd_adjoligo_dir, header = T, as.is = T)
+
+```
+
+#### ASD study: subselect for better group comparison
+
+**Subselect for better group comparison**
+
+- based on the stats shown, try removing the youngest 12 participants (all ASD) + removing the oldest 6 participants (all CTL), for the purposes of within-study comparisons
+- justification: 
+    - for LIBD, only took participants older than 18 (since differences in CTPs may be expected in this age group)
+    - there are more ASD than CTL participants, so this should help balance the design a bit better
+
+```{r}
+
+foo <- summary(asd %>% filter(RegionID == "BA9") %>% pull(age))
+
+asd %>% filter(RegionID == "BA9") %>% group_by(group) %>% dplyr::summarise(Q1 = length(which(age >= foo[1] & age <= foo[2])), Q2 = length(which(age > foo[2] & age <= foo[3])), Q3 = length(which(age > foo[3] & age <= foo[5])), Q4 = length(which(age > foo[5] & age <= foo[6])))
+
+asd %>% arrange(age) %>% dplyr::select(c("IID", "age", "group")) %>% head(20)
+asd %>% arrange(desc(age)) %>% dplyr::select(c("IID", "age", "group")) %>% head(20)
+
+# Choose to remove the youngest 12 people (all in ASD group)
+asd_exclude <- rbind(asd %>% arrange(age) %>% head(12) %>% dplyr::select("IID"), 
+                     asd %>% arrange(desc(age)) %>% head(6) %>% dplyr::select("IID"))
+
+write.table(asd_exclude[,c(1,1)], "~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/asd_exclude_studybalance.id", col.names = F, row.names = F, sep = "\t", quote = F)
+
+```
+
+#### SCZ study: subselect for better group comparison
+
+**Subselect for better group comparison**
+
+- take people aged 18+
+
+```{r}
+
+foo <- summary(scz %>% pull(age))
+
+scz %>% group_by(group) %>% dplyr::summarise(Q1 = length(which(age >= foo[1] & age <= foo[2])), Q2 = length(which(age > foo[2] & age <= foo[3])), Q3 = length(which(age > foo[3] & age <= foo[5])), Q4 = length(which(age > foo[5] & age <= foo[6])))
+
+scz %>% arrange(age) %>% dplyr::select(c("IID", "age", "group")) %>% filter(age <= 18)
+
+# Choose to remove the youngest 12 people (all in ASD group)
+scz_exclude <- scz %>% filter(age <= 18) %>% dplyr::select(c("IID"))
+scz_exclude$IID <- unlist(lapply(strsplit(scz_exclude$IID, "_"), function(x) x[1]))
+
+write.table(scz_exclude[,c(1,1)], "~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/scz_exclude_studybalance.id", col.names = F, row.names = F, sep = "\t", quote = F)
+
+```
+
+## Prep to merge
+
+### Same names for columns
+
+```{r}
+
+# Diagnosis variables
+scz$dx <- ifelse(scz$group == "SCZ", "SCZ", "CTL")
+asd$dx <- ifelse(asd$Diagnosis == "CTL", "CTL", "ASD")
+azd$dx <- ifelse(azd$group == "CTL", "CTL", "AZD")
+
+scz_adjoligo$dx <- ifelse(scz_adjoligo$group == "SCZ", "SCZ", "CTL")
+asd_adjoligo$dx <- ifelse(asd_adjoligo$group == "CTL", "CTL", "ASD")
+azd_adjoligo$dx <- ifelse(azd_adjoligo$group == "CTL", "CTL", "AZD")
+
+# Batch variable (take the batch variable with biggest effect)
+scz$batch <- scz$plate
+asd$batch <- paste("ASDbrain", asd$Batch, sep = "")
+#azd$batch <- azd$Sample_Plate
+azd$batch <- paste("ROSMAP", azd$batch, sep = "")
+
+scz_adjoligo$batch <- scz_adjoligo$plate
+asd_adjoligo$batch <- asd_adjoligo$Batch
+azd_adjoligo$batch <- azd_adjoligo$Sample_Plate
+
+# Study variable
+scz$study <- "LIBD"
+asd$study <- "ASDbrain"
+azd$study <- "ROSMAP"
+
+scz_adjoligo$study <- "LIBD"
+asd_adjoligo$study <- "ASDbrain"
+azd_adjoligo$study <- "ROSMAP"
+
+# Amend IID for SCZ
+scz$IID <- unlist(lapply(strsplit(scz$IID, "_"), function(x) x[1]))
+scz_adjoligo$IID <- unlist(lapply(strsplit(scz_adjoligo$IID, "_"), function(x) x[1]))
+
+# Rename cell-types from the deconvolution of interest
+colnames(scz) <- gsub("hseq_", "", colnames(scz))
+colnames(asd) <- gsub("hseq_", "", colnames(asd))
+colnames(azd) <- gsub("hseq_", "", colnames(azd))
+colnames(scz_adjoligo) <- gsub("hseq_", "", colnames(scz_adjoligo))
+colnames(asd_adjoligo) <- gsub("hseq_", "", colnames(asd_adjoligo))
+colnames(azd_adjoligo) <- gsub("hseq_", "", colnames(azd_adjoligo))
+
+# Add age2
+asd$age2 <- asd$age^2
+scz$age2 <- scz$age^2
+azd$age2 <- azd$age^2
+asd_adjoligo$age2 <- asd_adjoligo$age^2
+scz_adjoligo$age2 <- scz_adjoligo$age^2
+azd_adjoligo$age2 <- azd_adjoligo$age^2
+
+```
+
+### Take hseq data
+
+```{r}
+
+ctp_cols <- c("Exc", "Inh", "Astro", "Endo", "Micro", "Oligo", "OPC", "Neuron", "Glial")
+level2_cols <- ctp_cols[-which(ctp_cols %in% c("Neuron", "Glial"))]
+
+glial_rmoligo_n <- level2_cols[-which(level2_cols %in% c("Exc", "Inh", "Oligo"))]
+neuron_n <- c("Exc", "Inh")
+level2_rmoligo_cols <- c(neuron_n, glial_rmoligo_n)
+ctp_rmoligo_cols <- c(level2_rmoligo_cols, "Neuron", "Glial")
+
+keepcol_scz <- c("IID", ctp_cols, "dx", "age", "age2", "sex", "batch", "study")
+keepcol_scz_adjoligo <- c("IID", ctp_rmoligo_cols, "dx", "age", "age2", "sex", "batch", "study")
+#keepcol_scz <- c("IID", "Exc", "Inh", "NonN_Astro_FGF3R", "NonN_Micro.Endo_TYROBP", "NonN_Oligo_MBP", "group", "age", "sex", "race", "plate")
+
+keepcol_asd <- c("IID", ctp_cols, "dx", "age", "age2", "sex", "batch", "study")
+keepcol_asd_adjoligo <- c("IID", ctp_rmoligo_cols, "dx", "age", "age2", "sex", "batch", "study")
+#keepcol_asd <- c("IID", "Exc", "Inh", "NonN_Astro_FGF3R", "NonN_Micro.Endo_TYROBP", "NonN_Oligo_MBP", "Diagnosis", "age", "sex", "Batch", "PMI", "BrainBank")
+
+keepcol_azd <- c("IID", ctp_cols, "dx", "age", "age2", "sex", "batch", "study")
+keepcol_azd_adjoligo <- c("IID",  ctp_rmoligo_cols, "dx", "age", "age2", "sex", "batch", "study")
+#keepcol_azd <- c("IID", "Exc", "Inh", "NonN_Astro_FGF3R", "NonN_Micro.Endo_TYROBP", "NonN_Oligo_MBP", "group", "braaksc", "ceradsc", "cogdx", "dcfdx_lv", "age", "sex", "batch", "Sample_Plate", "study")
+
+```
+
+### Join into 1 dataframe
+
+```{r}
+
+ctp <- rbind(scz[,keepcol_scz], asd[,keepcol_asd])
+ctp <- rbind(ctp, azd[,keepcol_azd])
+
+# Adjust for oligodendrocytes
+ctp_adjoligo <- rbind(scz_adjoligo[,keepcol_scz_adjoligo], asd_adjoligo[,keepcol_asd_adjoligo])
+ctp_adjoligo <- rbind(ctp_adjoligo, azd_adjoligo[,keepcol_azd_adjoligo])
+
+```
+
+### Stacked bar charts
+
+```{r}
+
+ctp.tmp <- ctp %>% group_by(dx) %>% dplyr::arrange(Glial, .by_group = TRUE) %>% mutate(plot_id = paste(dx, Glial, sep = ""))
+ctp.tmp$plot_id <- paste(ctp.tmp$plot_id, 1:nrow(ctp.tmp), sep = "")
+ctp.tmp$plot_id <- ifelse(ctp.tmp$dx != "CTL", paste("a", ctp.tmp$plot_id, sep = ""), ctp.tmp$plot_id)
+
+ctp.long <- melt(ctp.tmp, id.vars = c("IID", "plot_id", "dx", "age", "age2", "sex", "batch", "study", "Neuron", "Glial"), variable.name = "celltype", value.name = "CTP")
+ctp.long$celltype <- as.character(ctp.long$celltype)
+ctp.long$celltype[grep("NonN", ctp.long$celltype)] <- unlist(lapply(strsplit(ctp.long$celltype[grep("NonN", ctp.long$celltype)], "_"), function(x) x[2]))
+# - order
+ctp.long$MatchDx <- match(ctp.long$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp.long$MatchStudy <- match(ctp.long$study, c("ASDbrain", "LIBD", "ROSMAP"))
+ctp.long$MatchCell <- match(ctp.long$celltype, unique(ctp.long$celltype))
+ctp.long$MatchID <- match(ctp.long$plot_id, ctp.long$plot_id)
+ctp.long$group <- ifelse(ctp.long$dx == "CTL", "CTL", "Dx")
+
+# Plot
+stackedbar <- ctp.long %>% mutate(dx = fct_reorder(dx, MatchDx)) %>% mutate(study = fct_reorder(study, MatchStudy)) %>% mutate(celltype = fct_reorder(celltype, MatchCell)) %>%
+ggplot(aes(x = plot_id, y = CTP, fill = celltype)) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_manual(values = wes_palette(name = "Zissou1", 7, type = "continuous"), name = "") +
+  theme(axis.title.x = element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+  facet_grid(~ study + dx, scales = "free_x", space = 'free_x')
+
+stackedbar
+
+ggsave(paste(out_dir, "/ctp_raw_stackedbar_ROSMAP_ASDbrain_LIBD.png", sep = ""), stackedbar, height = 8, width = 12)
+ggsave(paste(out_dir, "/ctp_raw_stackedbar_ROSMAP_ASDbrain_LIBD.svg", sep = ""), stackedbar, height = 8, width = 12)
+
+```
+
+## clr transformation
+
+```{r}
+
+# Keep oligodendrocytes
+keep_cols <- c("IID", "dx", "age", "age2", "sex", "batch", "study")
+ctp.tmp.clr <- as.matrix(ctp %>% dplyr::select(c(all_of(level2_cols))))
+
+# - Make minimum CTP = 1e-3
+length(which(ctp.tmp.clr <= 1e-3)) # check there are no 0s
+ctp.tmp.clr0 <- ctp.tmp.clr
+ctp.tmp.clr0[which(ctp.tmp.clr0 <= 1e-3)] <- 1e-3
+
+# - Perform clr-transform
+ctp.tmp.clr0.tr <- clr(ctp.tmp.clr0)
+ctp.clr.1e3 <- data.frame(ctp[,keep_cols], ctp.tmp.clr0.tr)
+
+# Adjust for oligodendrocytes
+keep_cols <- c("IID", "dx", "age", "age2", "sex", "batch", "study")
+ctp_adjoligo.tmp.clr <- as.matrix(ctp_adjoligo %>% dplyr::select(c(all_of(neuron_n), all_of(glial_rmoligo_n))))
+
+# Make minimum CTP = 1e-3
+length(which(ctp_adjoligo.tmp.clr <= 1e-3)) # check there are no 0s
+ctp_adjoligo.tmp.clr0 <- ctp_adjoligo.tmp.clr
+ctp_adjoligo.tmp.clr0[which(ctp_adjoligo.tmp.clr0 <= 1e-3)] <- 1e-3
+
+# Perform clr-transform
+ctp_adjoligo.tmp.clr0.tr <- clr(ctp_adjoligo.tmp.clr0)
+ctp_adjoligo.clr.1e3 <- data.frame(ctp[,keep_cols], ctp_adjoligo.tmp.clr0.tr)
+
+```
+
+## Inverse Normal Transform (INT)
+
+- N.B. doesn't matter if you do it on the RAW or CLR-transformed CTPs!
+
+```{r}
+
+int <- function(x) {
+  qnorm((rank(x,na.last="keep")-0.5)/sum(!is.na(x)))
+}
+
+# Keep oligodendrocytes
+keep_cols <- c("IID", "dx", "age", "age2", "sex", "batch", "study")
+
+# - Perform INT-transform
+ctp.int.tmp <- apply(as.matrix(ctp.clr.1e3 %>% dplyr::select(c(all_of(level2_cols)))), 2, int)
+ctp.int <- data.frame(ctp[,keep_cols], ctp.int.tmp)
+
+# Adjust for oligodendrocytes
+keep_cols <- c("IID", "dx", "age", "age2", "sex", "batch", "study")
+
+# Perform INT-transform
+ctp_adjoligo.int.tmp <- apply(as.matrix(ctp_adjoligo.clr.1e3 %>% dplyr::select(c(all_of(neuron_n), all_of(glial_rmoligo_n)))), 2, int)
+ctp_adjoligo.int <- data.frame(ctp[,keep_cols], ctp_adjoligo.int.tmp)
+
+```
+
+### Add MatchOrder column
+
+```{r}
+ctp$MatchOrder <- match(ctp$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp_adjoligo$MatchOrder <- match(ctp_adjoligo$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp.clr.1e3$MatchOrder <- match(ctp.clr.1e3$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp_adjoligo.clr.1e3$MatchOrder <- match(ctp_adjoligo.clr.1e3$dx, c("CTL", "ASD", "SCZ", "AZD"))
+```
+
+## Write output
+
+```{r}
+
+write.table(ctp, paste(out_dir, "/ctp_noclr_aggregated_scz_asd_azd.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+write.table(ctp_adjoligo, paste(out_dir, "/ctp_adjoligo_noclr_aggregated_scz_asd_azd.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+write.table(ctp.clr.1e3, paste(out_dir, "/ctp_clr1e-3_aggregated_scz_asd_azd.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+write.table(ctp_adjoligo.clr.1e3, paste(out_dir, "/ctp_adjoligo_clr1e-3_aggregated_scz_asd_azd.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+write.table(ctp.int, paste(out_dir, "/ctp_int_aggregated_scz_asd_azd.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+write.table(ctp_adjoligo.int, paste(out_dir, "/ctp_adjoligo_int_aggregated_scz_asd_azd.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+```
+
+## Long format
+
+```{r}
+
+ctp.long <- melt(ctp, id.vars = c("IID", "dx", "age", "age2", "sex", "batch", "study", "MatchOrder"), variable.name = "celltype", value.name = "CTP")
+ctp.long$Level <- ifelse(ctp.long$celltype %in% c("Neuron", "Glial"), "Level1", "Level2")
+ctp.long$MatchOrder <- match(ctp.long$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp.long$MatchCTP <- match(ctp.long$celltype, unique(c(ctp.long %>% filter(Level == "Level1") %>% pull(celltype) %>% as.character(), ctp.long %>% filter(Level == "Level2") %>% pull(celltype) %>% as.character())))
+ctp.long$celltype <- as.character(ctp.long$celltype)
+ctp.long$celltype[grep("NonN", ctp.long$celltype)] <- unlist(lapply(strsplit(ctp.long$celltype[grep("NonN", ctp.long$celltype)], "_"), function(x) x[2]))
+
+ctp_adjoligo.long <- melt(ctp_adjoligo, id.vars = c("IID", "dx", "age", "age2", "sex", "batch", "study", "MatchOrder"), variable.name = "celltype", value.name = "CTP")
+ctp_adjoligo.long$Level <- ifelse(ctp_adjoligo.long$celltype %in% c("Neuron", "Glial"), "Level1", "Level2")
+ctp_adjoligo.long$MatchOrder <- match(ctp_adjoligo.long$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp_adjoligo.long$MatchCTP <- match(ctp_adjoligo.long$celltype, unique(c(ctp_adjoligo.long %>% filter(Level == "Level1") %>% pull(celltype) %>% as.character(), ctp_adjoligo.long %>% filter(Level == "Level2") %>% pull(celltype) %>% as.character())))
+ctp_adjoligo.long$celltype <- as.character(ctp_adjoligo.long$celltype)
+ctp_adjoligo.long$celltype[grep("NonN", ctp_adjoligo.long$celltype)] <- unlist(lapply(strsplit(ctp_adjoligo.long$celltype[grep("NonN", ctp_adjoligo.long$celltype)], "_"), function(x) x[2]))
+
+ctp.clr.1e3.long <- melt(ctp.clr.1e3, id.vars = c("IID", "dx", "age", "age2", "sex", "batch", "study", "MatchOrder"), variable.name = "celltype", value.name = "CTP")
+ctp.clr.1e3.long$Level <- ifelse(ctp.clr.1e3.long$celltype %in% c("Neuron", "Glial"), "Level1", "Level2")
+ctp.clr.1e3.long$MatchOrder <- match(ctp.clr.1e3.long$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp.clr.1e3.long$MatchCTP <- match(ctp.clr.1e3.long$celltype, unique(c(ctp.clr.1e3.long %>% filter(Level == "Level1") %>% pull(celltype) %>% as.character(), ctp.clr.1e3.long %>% filter(Level == "Level2") %>% pull(celltype) %>% as.character())))
+ctp.clr.1e3.long$celltype <- as.character(ctp.clr.1e3.long$celltype)
+ctp.clr.1e3.long$celltype[grep("NonN", ctp.clr.1e3.long$celltype)] <- unlist(lapply(strsplit(ctp.clr.1e3.long$celltype[grep("NonN", ctp.clr.1e3.long$celltype)], "_"), function(x) x[2]))
+
+ctp_adjoligo.clr.1e3.long <- melt(ctp_adjoligo.clr.1e3, id.vars = c("IID", "dx", "age", "age2", "sex", "batch", "study", "MatchOrder"), variable.name = "celltype", value.name = "CTP")
+ctp_adjoligo.clr.1e3.long$Level <- ifelse(ctp_adjoligo.clr.1e3.long$celltype %in% c("Neuron", "Glial"), "Level1", "Level2")
+ctp_adjoligo.clr.1e3.long$MatchOrder <- match(ctp_adjoligo.clr.1e3.long$dx, c("CTL", "ASD", "SCZ", "AZD"))
+ctp_adjoligo.clr.1e3.long$MatchCTP <- match(ctp_adjoligo.clr.1e3.long$celltype, unique(c(ctp_adjoligo.clr.1e3.long %>% filter(Level == "Level1") %>% pull(celltype) %>% as.character(), ctp_adjoligo.clr.1e3.long %>% filter(Level == "Level2") %>% pull(celltype) %>% as.character())))
+ctp_adjoligo.clr.1e3.long$celltype <- as.character(ctp_adjoligo.clr.1e3.long$celltype)
+ctp_adjoligo.clr.1e3.long$celltype[grep("NonN", ctp_adjoligo.clr.1e3.long$celltype)] <- unlist(lapply(strsplit(ctp_adjoligo.clr.1e3.long$celltype[grep("NonN", ctp_adjoligo.clr.1e3.long$celltype)], "_"), function(x) x[2]))
+
+```
+
+# Plots of differences
+
+## No clr, no adjustment for oligodendrocytes
+
+```{r}
+
+ctp.long %>% filter(!IID %in% asd_exclude$IID) %>% filter(!IID %in% scz_exclude$IID) %>%
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = CTP, fill = dx)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  coord_flip() + theme_bw() + xlab("") +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  facet_grid(Level ~ study, scales = "free_y", space = 'free_y')
+
+ggsave(paste(out_dir, "/ctp_differences_bygroup_raw.png", sep = ""))
+ggsave(paste(out_dir, "/ctp_differences_bygroup_raw.svg", sep = ""))
+
+```
+
+## No clr, adjustment for oligodendrocytes
+
+```{r}
+
+ctp_adjoligo.long %>% filter(!IID %in% asd_exclude$IID) %>% filter(!IID %in% scz_exclude$IID) %>%
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = CTP, fill = dx)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  coord_flip() + theme_bw() + xlab("") +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  facet_grid(Level ~ study, scales = "free_y", space = 'free_y')
+
+```
+
+## clr, no adjustment for oligodendrocytes
+
+```{r}
+
+ctp.clr.1e3.long %>% filter(!IID %in% asd_exclude$IID) %>% filter(!IID %in% scz_exclude$IID) %>%
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = CTP, fill = dx)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  coord_flip() + theme_bw() + xlab("") +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  facet_grid(Level ~ study, scales = "free_y", space = 'free_y')
+
+ggsave(paste(out_dir, "/ctp_differences_bygroup_clr.png", sep = ""))
+ggsave(paste(out_dir, "/ctp_differences_bygroup_clr.svg", sep = ""))
+
+```
+
+## clr, adjustment for oligodendrocytes
+
+```{r}
+
+ctp_adjoligo.clr.1e3.long %>% filter(!IID %in% asd_exclude$IID) %>% filter(!IID %in% scz_exclude$IID) %>%
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = CTP, fill = dx)) + 
+  geom_boxplot(position = position_dodge(.8),alpha=.8,outlier.size = 0)+ 
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  coord_flip() + theme_bw() + xlab("") +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  facet_grid(Level ~ study, scales = "free_y", space = 'free_y')
+
+```
+
+# Age differences
+
+- include all participants (ie. irrespective of within-study age matching)
+
+## Plot distributions
+
+```{r}
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  ggplot(aes(x = age, fill = dx)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_wrap(~ study, scales = "free_y")
+
+ggsave(paste(out_dir, "/demographic_differences_age.pdf", sep = ""), height = 3, width = 9)
+ggsave(paste(out_dir, "/demographic_differences_age.svg", sep = ""), height = 3, width = 9)
+
+ctp.long %>% filter(!IID %in% asd_exclude$IID) %>% filter(!IID %in% scz_exclude$IID) %>%
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  ggplot(aes(x = age, fill = dx)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_wrap(~ study, scales = "free_y")
+
+ggsave(paste(out_dir, "/demographic_differences_age_asdsczexclude.pdf", sep = ""), height = 3, width = 9)
+ggsave(paste(out_dir, "/demographic_differences_age_asdsczexclude.svg", sep = ""), height = 3, width = 9)
+
+```
+
+## CTPs by age
+
+### No clr, no adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP, colour = dx)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free_y")
+
+```
+
+**Keep CTP % constant**
+
+```{r, fig.height = 9}
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP, colour = dx)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free_x")
+
+```
+
+**Aggregate into 1 plot**
+
+```{r, fig.height = 9}
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP)) +
+  geom_point(alpha = 0.6, aes(colour = dx, shape = study)) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_wrap(~ celltype, scales = "free_x", ncol = 1)
+
+ggsave(paste(out_dir, "/ctp_differences_byage_raw.png", sep = ""), height = 10, width = 3)
+ggsave(paste(out_dir, "/ctp_differences_byage_raw.svg", sep = ""), height = 10, width = 3)
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP)) +
+  geom_point(alpha = 0.6, aes(colour = dx, shape = study)) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_wrap(~ celltype, scales = "free_x", ncol = 3)
+
+ggsave(paste(out_dir, "/ctp_differences_byage_raw_col3.png", sep = ""), height = 7, width = 7)
+ggsave(paste(out_dir, "/ctp_differences_byage_raw_col3.svg", sep = ""), height = 7, width = 7)
+
+```
+
+### No clr, adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp_adjoligo.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP, colour = dx)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+
+```
+
+## clr, no adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP, colour = dx)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+
+```
+
+**Plots that regress out batch effect**
+
+```{r}
+
+#batch_coef <- ctp.clr.1e3.long %>% group_by(study, celltype) %>% 
+batch_coef <- ctp.clr.1e3.long %>% group_by(celltype) %>% 
+  do(model = tidy(lm(CTP ~ batch, data = .))) %>% unnest(model) %>%
+  mutate(term = gsub("batch", "", term)) %>%
+  dplyr::rename(batch = term) %>%
+  dplyr::select(c("celltype", "batch", "estimate"))
+
+# Modify CTP in light of batch adjustment
+# - subtraction as it's relative to a given batch (eg. coefficient +1, means that batch has +1 unit higher on average --> need to push back down)
+ctp.clr.1e3.long %>%
+  #left_join(., batch_coef, by = c("study", "celltype", "batch")) %>% 
+  left_join(., batch_coef, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP_batchadjust, colour = dx)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study)
+
+```
+
+**Keep CTP % constant**
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP, colour = dx)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free_x")
+
+```
+
+**Aggregate into 1 plot**
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP)) +
+  geom_point(alpha = 0.6, aes(colour = dx, shape = study)) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  theme(legend.position = "none") +
+  facet_wrap(~ celltype, ncol = 1)
+
+ggsave(paste(out_dir, "/ctp_differences_byage_clr.png", sep = ""), height = 9, width = 3)
+ggsave(paste(out_dir, "/ctp_differences_byage_clr.svg", sep = ""), height = 9, width = 3)
+
+ctp.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP)) +
+  geom_point(alpha = 0.6, aes(colour = dx, shape = study)) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  theme(legend.position = "none") +
+  facet_wrap(~ celltype, ncol = 3)
+
+ggsave(paste(out_dir, "/ctp_differences_byage_clr_col3.png", sep = ""), height = 7, width = 7)
+ggsave(paste(out_dir, "/ctp_differences_byage_clr_col3.svg", sep = ""), height = 7, width = 7)
+
+```
+
+**Aggregate into 1 plot, regressing out batch effects**
+
+```{r, fig.height = 9}
+
+# Change cell-type names
+ctp.clr.1e3.long$celltype <- as.character(ctp.clr.1e3.long$celltype)
+#ctp.clr.1e3.long$celltype <- gsub("NonN_", "", ctp.clr.1e3.long$celltype)
+#ctp.clr.1e3.long$celltype <- gsub("_FGF3R", "", ctp.clr.1e3.long$celltype)
+#ctp.clr.1e3.long$celltype <- gsub("_TYROBP", "", ctp.clr.1e3.long$celltype)
+#ctp.clr.1e3.long$celltype <- gsub("_MBP", "", ctp.clr.1e3.long$celltype)
+
+batch_coef2 <- batch_coef
+batch_coef2$celltype <- as.character(batch_coef2$celltype)
+#batch_coef2$celltype <- gsub("NonN_", "", batch_coef2$celltype)
+#batch_coef2$celltype <- gsub("_FGF3R", "", batch_coef2$celltype)
+#batch_coef2$celltype <- gsub("_TYROBP", "", batch_coef2$celltype)
+#batch_coef2$celltype <- gsub("_MBP", "", batch_coef2$celltype)
+
+ctp.clr.1e3.long %>% 
+#  left_join(., batch_coef2, by = c("study", "celltype", "batch")) %>% 
+  left_join(., batch_coef2, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP_batchadjust)) +
+  geom_point(alpha = 0.6, aes(colour = dx, shape = study)) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+#  theme(legend.position = "none") +
+  facet_wrap(~ celltype)
+#  facet_wrap(~ celltype, ncol = 1)
+
+ggsave(paste(out_dir, "/ctp_differences_byage_clr_adjustbatch.png", sep = ""), height = 5, width = 6)
+ggsave(paste(out_dir, "/ctp_differences_byage_clr_adjustbatch.svg", sep = ""), height = 6, width = 6)
+
+```
+
+
+```{r}
+
+ctp.clr.1e3.long %>% 
+  #left_join(., batch_coef2, by = c("study", "celltype", "batch")) %>% 
+  left_join(., batch_coef2, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP_batchadjust)) +
+  geom_point(alpha = 0.6, aes(colour = dx, shape = study)) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  theme(legend.position = "none") +
+  facet_wrap(~ celltype, ncol = 1)
+
+ggsave(paste(out_dir, "/ctp_differences_byage_clr_adjustbatch_1col.png", sep = ""), height = 9, width = 2)
+ggsave(paste(out_dir, "/ctp_differences_byage_clr_adjustbatch_1col.svg", sep = ""), height = 9, width = 2)
+
+```
+
+## clr, adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp_adjoligo.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = age, y = CTP, colour = dx)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+
+```
+
+# Sex differences
+
+## Plot distributions
+
+```{r}
+
+ctp %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  group_by(sex, dx, study) %>% dplyr::summarise(n = n()) %>%
+  filter(!is.na(sex)) %>%
+  ggplot(aes(x = sex, y = n, fill = dx)) +
+  geom_col() +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_wrap(~ study, scales = "free_y")
+
+ggsave(paste(out_dir, "/demographic_differences_sex.svg", sep = ""), height = 3, width = 9)
+
+ctp %>% filter(!IID %in% asd_exclude$IID) %>% filter(!IID %in% scz_exclude$IID) %>%
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% 
+  group_by(sex, dx, study) %>% dplyr::summarise(n = n()) %>%
+  filter(!is.na(sex)) %>%
+  ggplot(aes(x = sex, y = n, fill = dx)) +
+  geom_col() +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_wrap(~ study, scales = "free_y")
+
+ggsave(paste(out_dir, "/demographic_differences_sex_asdsczexclude.svg", sep = ""), height = 3, width = 9)
+
+```
+
+## No clr, no adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_point(aes(colour = dx)) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+
+```
+
+**Keep CTP % constant**
+
+```{r, fig.height = 9}
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_point(aes(colour = dx)) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study)
+  
+```
+
+**Aggregate into 1 plot**
+
+```{r, fig.height = 9}
+
+ctp.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, color="grey", alpha=0.2) +
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_wrap(~ celltype, ncol = 1)
+
+ggsave(paste(out_dir, "/ctp_differences_bysex_raw.png", sep = ""), height = 9, width = 3)
+ggsave(paste(out_dir, "/ctp_differences_bysex_raw.svg", sep = ""), height = 9, width = 3)
+  
+```
+
+## No clr, adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp_adjoligo.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_point(aes(colour = dx)) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+  
+```
+
+## clr, no adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_point(aes(colour = dx)) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+  
+```
+
+**Keep CTP % constant**
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study)
+  
+```
+
+**Plots that regress out batch effect**
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% 
+  #left_join(., batch_coef, by = c("study", "celltype", "batch")) %>% 
+  left_join(., batch_coef, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP_batchadjust)) +
+  geom_violin() +
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+
+```
+
+**Aggregate into 1 plot**
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, color="grey", alpha=0.2) +
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  theme(legend.position = "none") +
+  facet_wrap(~ celltype, ncol = 1)
+
+ggsave(paste(out_dir, "/ctp_differences_bysex_clr.png", sep = ""), height = 9, width = 3)
+ggsave(paste(out_dir, "/ctp_differences_bysex_clr.svg", sep = ""), height = 9, width = 3)
+  
+```
+
+**Aggregate into 1 plot, regressing out batch effects**
+
+```{r, fig.height = 9}
+
+ctp.clr.1e3.long %>% 
+  #left_join(., batch_coef, by = c("study", "celltype", "batch")) %>% 
+  left_join(., batch_coef, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP_batchadjust)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, color="grey", alpha=0.2) +
+  geom_point(aes(colour = dx), position = position_jitterdodge(.1),alpha=.3) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  theme(legend.position = "none") +
+  facet_wrap(~ celltype, ncol = 1)
+
+ggsave(paste(out_dir, "/ctp_differences_bysex_clr_adjustbatch.png", sep = ""), height = 9, width = 3)
+ggsave(paste(out_dir, "/ctp_differences_bysex_clr_adjustbatch.svg", sep = ""), height = 9, width = 3)
+  
+```
+
+## clr, adjustment for oligodendrocytes
+
+```{r, fig.height = 9}
+
+ctp_adjoligo.clr.1e3.long %>% mutate(dx = fct_reorder(dx, MatchOrder)) %>% filter(!is.na(sex)) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCTP)) %>% 
+  ggplot(aes(x = sex, y = CTP)) +
+  geom_violin() +
+  geom_point(aes(colour = dx)) +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() +
+  facet_grid(celltype ~ study, scales = "free")
+  
+```
+
+# Variance in CTPs (clr-transformed) related to each of variables
+
+```{r}
+
+exc_aov <- summary(aov(Exc ~ age + age2 + sex + batch + dx, data = ctp.clr.1e3))[[1]]
+inh_aov <- summary(aov(Inh ~ age + age2 + sex + batch + dx, data = ctp.clr.1e3))[[1]]
+astro_aov <- summary(aov(Astro ~ age + age2 + sex + batch + dx, data = ctp.clr.1e3))[[1]]
+endo_aov <- summary(aov(Endo ~ age + age2 + sex + batch + dx, data = ctp.clr.1e3))[[1]]
+micro_aov <- summary(aov(Micro ~ age + age2 + sex + batch + dx, data = ctp.clr.1e3))[[1]]
+oligo_aov <- summary(aov(Oligo ~ age + age2 + sex + batch + dx, data = ctp.clr.1e3))[[1]]
+opc_aov <- summary(aov(OPC ~ age + age2 + sex + batch + dx, data = ctp.clr.1e3))[[1]]
+
+exc_aov <- summary(aov(Exc ~ age + age2 + sex + dx + batch, data = ctp.clr.1e3))[[1]]
+inh_aov <- summary(aov(Inh ~ age + age2 + sex + dx + batch, data = ctp.clr.1e3))[[1]]
+astro_aov <- summary(aov(Astro ~ age + age2 + sex + dx + batch, data = ctp.clr.1e3))[[1]]
+endo_aov <- summary(aov(Endo ~ age + age2 + sex + dx + batch, data = ctp.clr.1e3))[[1]]
+micro_aov <- summary(aov(Micro ~ age + age2 + sex + dx + batch, data = ctp.clr.1e3))[[1]]
+oligo_aov <- summary(aov(Oligo ~ age + age2 + sex + dx + batch, data = ctp.clr.1e3))[[1]]
+opc_aov <- summary(aov(OPC ~ age + age2 + sex + dx + batch, data = ctp.clr.1e3))[[1]]
+
+# Summary tables
+exc_sumsq <- exc_aov$'Sum Sq'[1:(nrow(exc_aov)-1)]
+exc_sumsq <- exc_aov$'Sum Sq'
+exc_totalsumsq <- sum(exc_aov$'Sum Sq')
+exc_sumsq_summary <- data.frame(variable = rownames(exc_aov), SumSq = exc_sumsq, var_pc = exc_sumsq/exc_totalsumsq*100, Cumulative = cumsum(exc_sumsq), p = exc_aov$'Pr(>F)', CTP_PGS = "Exc")
+exc_sumsq_summary
+
+inh_sumsq <- inh_aov$'Sum Sq'[1:(nrow(inh_aov)-1)]
+inh_sumsq <- inh_aov$'Sum Sq'
+inh_totalsumsq <- sum(inh_aov$'Sum Sq')
+inh_sumsq_summary <- data.frame(variable = rownames(inh_aov), SumSq = inh_sumsq, var_pc = inh_sumsq/inh_totalsumsq*100, Cumulative = cumsum(inh_sumsq), p = inh_aov$'Pr(>F)', CTP_PGS = "Inh")
+inh_sumsq_summary
+
+astro_sumsq <- astro_aov$'Sum Sq'[1:(nrow(astro_aov)-1)]
+astro_sumsq <- astro_aov$'Sum Sq'
+astro_totalsumsq <- sum(astro_aov$'Sum Sq')
+astro_sumsq_summary <- data.frame(variable = rownames(astro_aov), SumSq = astro_sumsq, var_pc = astro_sumsq/astro_totalsumsq*100, Cumulative = cumsum(astro_sumsq), p = astro_aov$'Pr(>F)', CTP_PGS = "Astro")
+astro_sumsq_summary
+
+endo_sumsq <- endo_aov$'Sum Sq'[1:(nrow(endo_aov)-1)]
+endo_sumsq <- endo_aov$'Sum Sq'
+endo_totalsumsq <- sum(endo_aov$'Sum Sq')
+endo_sumsq_summary <- data.frame(variable = rownames(endo_aov), SumSq = endo_sumsq, var_pc = endo_sumsq/endo_totalsumsq*100, Cumulative = cumsum(endo_sumsq), p = endo_aov$'Pr(>F)', CTP_PGS = "Endo")
+endo_sumsq_summary
+
+micro_sumsq <- micro_aov$'Sum Sq'[1:(nrow(micro_aov)-1)]
+micro_sumsq <- micro_aov$'Sum Sq'
+micro_totalsumsq <- sum(micro_aov$'Sum Sq')
+micro_sumsq_summary <- data.frame(variable = rownames(micro_aov), SumSq = micro_sumsq, var_pc = micro_sumsq/micro_totalsumsq*100, Cumulative = cumsum(micro_sumsq), p = micro_aov$'Pr(>F)', CTP_PGS = "Micro")
+micro_sumsq_summary
+
+oligo_sumsq <- oligo_aov$'Sum Sq'[1:(nrow(oligo_aov)-1)]
+oligo_sumsq <- oligo_aov$'Sum Sq'
+oligo_totalsumsq <- sum(oligo_aov$'Sum Sq')
+oligo_sumsq_summary <- data.frame(variable = rownames(oligo_aov), SumSq = oligo_sumsq, var_pc = oligo_sumsq/oligo_totalsumsq*100, Cumulative = cumsum(oligo_sumsq), p = oligo_aov$'Pr(>F)', CTP_PGS = "Oligo")
+oligo_sumsq_summary
+
+opc_sumsq <- opc_aov$'Sum Sq'[1:(nrow(opc_aov)-1)]
+opc_sumsq <- opc_aov$'Sum Sq'
+opc_totalsumsq <- sum(opc_aov$'Sum Sq')
+opc_sumsq_summary <- data.frame(variable = rownames(opc_aov), SumSq = opc_sumsq, var_pc = opc_sumsq/opc_totalsumsq*100, Cumulative = cumsum(opc_sumsq), p = opc_aov$'Pr(>F)', CTP_PGS = "OPC")
+opc_sumsq_summary
+
+ctp_aov_summary <- rbind(exc_sumsq_summary, inh_sumsq_summary, astro_sumsq_summary, endo_sumsq_summary, micro_sumsq_summary, oligo_sumsq_summary, opc_sumsq_summary)
+ctp_aov_summary %>% 
+  mutate(variable = gsub("[[:blank:]]", "", variable)) %>%
+  filter(variable != "Residuals") %>%
+  mutate(MatchVariable = match(variable, unique(variable))) %>%
+  mutate(MatchAnalysis = match(CTP_PGS, unique(CTP_PGS))) %>%
+  mutate(variable = fct_reorder(variable, rev(MatchVariable))) %>%
+  mutate(CTP_PGS = fct_reorder(CTP_PGS, rev(MatchAnalysis))) %>%
+  ggplot(aes(x = CTP_PGS, y = var_pc, fill = variable)) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  ylab("Variance % explained of clr-transformed CTP") + xlab("Cell-type") +
+  coord_flip()
+
+ggsave(paste(out_dir, "/ctp_variance_covariates.png", sep = ""))
+ggsave(paste(out_dir, "/ctp_variance_covariates.svg", sep = ""))
+
+```
+
+# Overall contribution of CTPs to diagnosis
+
+- obtain compositional PCs of CTP data
+- likelihood ratio test to test for difference in model with and without CTP PCs
+
+## CTP PCs for all data
+
+```{r}
+
+ctp.tmp <- as.matrix(ctp %>% dplyr::select(c(level2_cols)))
+rownames(ctp.tmp) <- ctp$IID
+ctp.tmp[which(ctp.tmp <= 0)] <- 1e-3
+ctp.acomp <- acomp(ctp.tmp)
+rownames(ctp.acomp) <- ctp$IID
+mean(ctp.acomp)
+
+# Take supervised PCs, per individual
+ctp.pcx <- princomp(ctp.acomp)
+ctp.pcs <- ctp.pcx$scores
+
+# Scree plot
+screeplot(ctp.pcx, main = "Compositional PCA Scree Plot")
+summary(ctp.pcx) # Take the PCs explaining 90-95% of variance
+loadings(ctp.pcx)
+loadings.ma <- loadings(ctp.pcx)
+class(loadings.ma) <- "matrix"
+loadings.long <- melt(data.frame(celltype = rownames(loadings.ma), loadings.ma), variable.name = "CTP_PC", value.name = "Loading")
+analysis_order <- c(level2_cols)
+loadings.long$MatchAnalysis <- match(loadings.long$celltype, analysis_order)
+loadings.long %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% 
+  ggplot(aes(x = CTP_PC, y = Loading, fill = celltype)) + 
+  geom_bar(stat="identity", position=position_dodge())
+
+ggsave(paste(out_dir, "/ctp_noclr_pc_ROSMAP_ASDbrain_LIBD_loadings.svg", sep = ""))
+ggsave(paste(out_dir, "/ctp_noclr_pc_ROSMAP_ASDbrain_LIBD_loadings.png", sep = ""))
+
+# Take the PCs explaining 90-95% of variance
+# - Check the % of variance explained by the PCs
+# - from here, take the number of PCs that explain 
+foo <- ((ctp.pcx$sdev)^2)/((sum((ctp.pcx$sdev)^2)))*100
+var_exp <- data.frame(Var_pc = foo, Cumulative_Var_pc = cumsum(foo))
+print(var_exp)
+
+# Choose the number of PCs to include as covariates
+# - eg. in my dataset it's the first 3 PCs
+pcs_keep <- rownames(var_exp)
+#pcs_keep <- rownames(var_exp)[1:which(var_exp$Cumulative_Var_pc >= 95)[1]]
+
+# Join into pheno data frame
+ctp_pc <- inner_join(ctp, data.frame(IID = rownames(ctp.pcx$scores), ctp.pcx$scores[,pcs_keep]), by = "IID", type = "inner")
+
+# Write tables for GWAS 
+saveRDS(ctp_pc, paste(out_dir, "/ctp_noclr_pc_ROSMAP_ASDbrain_LIBD.rds", sep = ""))
+
+# Look for relationships
+summary(lm(cbind(Comp.1, Comp.2, Comp.3, Comp.4, Comp.5, Comp.6) ~ age + age2 + sex + dx + batch, data = ctp_pc))
+
+```
+
+## ASDbrain
+
+```{r}
+
+studyn <- "ASDbrain"
+
+# Make compositional object
+tmp <- ctp %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID)
+ctp.tmp <- as.matrix(tmp %>% dplyr::select(c(level2_cols)))
+ctp.tmp[which(ctp.tmp <= 0)] <- 1e-3
+ctp.acomp <- acomp(ctp.tmp)
+rownames(ctp.acomp) <- tmp$IID
+mean(ctp.acomp)
+
+# Take supervised PCs, per individual
+ctp.pcx <- princomp(ctp.acomp)
+ctp.pcs <- ctp.pcx$scores
+
+# Scree plot
+screeplot(ctp.pcx, main = "Compositional PCA Scree Plot")
+summary(ctp.pcx) # Take the PCs explaining 90-95% of variance
+loadings(ctp.pcx)
+loadings.ma <- loadings(ctp.pcx)
+class(loadings.ma) <- "matrix"
+loadings.long <- melt(data.frame(celltype = rownames(loadings.ma), loadings.ma), variable.name = "CTP_PC", value.name = "Loading")
+analysis_order <- c(level2_cols)
+loadings.long$MatchAnalysis <- match(loadings.long$celltype, analysis_order)
+loadings.long %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% 
+  ggplot(aes(x = CTP_PC, y = Loading, fill = celltype)) + 
+  geom_bar(stat="identity", position=position_dodge())
+
+ggsave(paste(out_dir, "/ctp_noclr_pc_ASDbrain_loadings.svg", sep = ""))
+ggsave(paste(out_dir, "/ctp_noclr_pc_ASDbrain_loadings.png", sep = ""))
+
+# Take the PCs explaining 90-95% of variance
+# - Check the % of variance explained by the PCs
+# - from here, take the number of PCs that explain 
+foo <- ((ctp.pcx$sdev)^2)/((sum((ctp.pcx$sdev)^2)))*100
+var_exp <- data.frame(Var_pc = foo, Cumulative_Var_pc = cumsum(foo))
+print(var_exp)
+
+# Choose the number of PCs to include as covariates
+# - eg. in my dataset it's the first 3 PCs
+pcs_keep <- rownames(var_exp)[1:which(var_exp$Cumulative_Var_pc >= 95)[1]]
+
+# Join into pheno data frame
+ctp_pc <- inner_join(ctp, data.frame(IID = rownames(ctp.pcx$scores), ctp.pcx$scores[,pcs_keep]), by = "IID", type = "inner")
+ctp_pc <- ctp_pc %>% mutate(MatchDx = match(dx, c("CTL", "ASD"))) %>% mutate(dx = fct_reorder(dx, MatchDx)) %>% dplyr::select(-c("MatchDx"))
+
+# Write table
+saveRDS(ctp_pc, paste(out_dir, "/ctp_noclr_pc95_", studyn, ".rds", sep = ""))
+
+# Run model
+mod0 <- lrm(dx ~ age + sex + batch, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID))
+mod1 <- lrm(dx ~ age + sex + batch + Comp.1 + Comp.2 + Comp.3, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID))
+
+mod0
+mod1
+lrtest(mod0, mod1)
+
+modx <- lrm(dx ~ Comp.1 + Comp.2 + Comp.3, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID))
+modx
+
+saveRDS(mod0, paste(out_dir, "/ASD_methylation_brain_ctp_mod0.rds", sep = ""))
+saveRDS(mod1, paste(out_dir, "/ASD_methylation_brain_ctp_mod1.rds", sep = ""))
+
+```
+
+## LIBD
+
+```{r}
+
+studyn <- "LIBD"
+
+# Make compositional object
+tmp <- ctp %>% filter(study == all_of(studyn)) %>% filter(!IID %in% scz_exclude$IID)
+ctp.tmp <- as.matrix(tmp %>% dplyr::select(c(level2_cols)))
+ctp.tmp[which(ctp.tmp <= 0)] <- 1e-3
+ctp.acomp <- acomp(ctp.tmp)
+rownames(ctp.acomp) <- tmp$IID
+mean(ctp.acomp)
+
+# Take supervised PCs, per individual
+ctp.pcx <- princomp(ctp.acomp)
+ctp.pcs <- ctp.pcx$scores
+
+# Scree plot
+screeplot(ctp.pcx, main = "Compositional PCA Scree Plot")
+summary(ctp.pcx) # Take the PCs explaining 90-95% of variance
+loadings(ctp.pcx)
+loadings.ma <- loadings(ctp.pcx)
+class(loadings.ma) <- "matrix"
+loadings.long <- melt(data.frame(celltype = rownames(loadings.ma), loadings.ma), variable.name = "CTP_PC", value.name = "Loading")
+analysis_order <- c(level2_cols)
+loadings.long$MatchAnalysis <- match(loadings.long$celltype, analysis_order)
+loadings.long %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% 
+  ggplot(aes(x = CTP_PC, y = Loading, fill = celltype)) + 
+  geom_bar(stat="identity", position=position_dodge())
+
+ggsave(paste(out_dir, "/ctp_noclr_pc_LIBD_loadings.svg", sep = ""))
+ggsave(paste(out_dir, "/ctp_noclr_pc_LIBD_loadings.png", sep = ""))
+
+# Take the PCs explaining 90-95% of variance
+# - Check the % of variance explained by the PCs
+# - from here, take the number of PCs that explain 
+foo <- ((ctp.pcx$sdev)^2)/((sum((ctp.pcx$sdev)^2)))*100
+var_exp <- data.frame(Var_pc = foo, Cumulative_Var_pc = cumsum(foo))
+print(var_exp)
+
+# Choose the number of PCs to include as covariates
+# - eg. in my dataset it's the first 3 PCs
+pcs_keep <- rownames(var_exp)[1:which(var_exp$Cumulative_Var_pc >= 95)[1]]
+
+# Join into pheno data frame
+ctp_pc <- inner_join(ctp, data.frame(IID = rownames(ctp.pcx$scores), ctp.pcx$scores[,pcs_keep]), by = "IID", type = "inner")
+ctp_pc <- ctp_pc %>% mutate(MatchDx = match(dx, c("CTL", "SCZ"))) %>% mutate(dx = fct_reorder(dx, MatchDx)) %>% dplyr::select(-c("MatchDx"))
+
+# Write table
+saveRDS(ctp_pc, paste(out_dir, "/ctp_noclr_pc95_", studyn, ".rds", sep = ""))
+
+# Run model
+mod0 <- lrm(dx ~ age + sex + batch, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)) %>% filter(!IID %in% scz_exclude$IID))
+mod1 <- lrm(dx ~ age + sex + batch + Comp.1 + Comp.2 + Comp.3 + Comp.4, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)) %>% filter(!IID %in% scz_exclude$IID))
+
+mod0
+mod1
+lrtest(mod0, mod1)
+
+modx <- lrm(dx ~ Comp.1 + Comp.2 + Comp.3 + Comp.4, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)) %>% filter(!IID %in% scz_exclude$IID))
+modx
+
+saveRDS(mod0, paste(out_dir, "/LIBD_ctp_mod0.rds", sep = ""))
+saveRDS(mod1, paste(out_dir, "/LIBD_ctp_mod1.rds", sep = ""))
+
+```
+
+## ROSMAP
+
+```{r}
+
+studyn <- "ROSMAP"
+
+# Make compositional object
+tmp <- ctp %>% filter(study == all_of(studyn))
+ctp.tmp <- as.matrix(tmp %>% dplyr::select(c(level2_cols)))
+ctp.tmp[which(ctp.tmp <= 0)] <- 1e-3
+ctp.acomp <- acomp(ctp.tmp)
+rownames(ctp.acomp) <- tmp$IID
+mean(ctp.acomp)
+
+# Take supervised PCs, per individual
+ctp.pcx <- princomp(ctp.acomp)
+ctp.pcs <- ctp.pcx$scores
+
+# Scree plot
+screeplot(ctp.pcx, main = "Compositional PCA Scree Plot")
+summary(ctp.pcx) # Take the PCs explaining 90-95% of variance
+loadings(ctp.pcx)
+loadings.ma <- loadings(ctp.pcx)
+class(loadings.ma) <- "matrix"
+loadings.long <- melt(data.frame(celltype = rownames(loadings.ma), loadings.ma), variable.name = "CTP_PC", value.name = "Loading")
+analysis_order <- c(level2_cols)
+loadings.long$MatchAnalysis <- match(loadings.long$celltype, analysis_order)
+loadings.long %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% 
+  ggplot(aes(x = CTP_PC, y = Loading, fill = celltype)) + 
+  geom_bar(stat="identity", position=position_dodge())
+
+ggsave(paste(out_dir, "/ctp_noclr_pc_ROSMAP_loadings.svg", sep = ""))
+ggsave(paste(out_dir, "/ctp_noclr_pc_ROSMAP_loadings.png", sep = ""))
+
+# Take the PCs explaining 90-95% of variance
+# - Check the % of variance explained by the PCs
+# - from here, take the number of PCs that explain 
+foo <- ((ctp.pcx$sdev)^2)/((sum((ctp.pcx$sdev)^2)))*100
+var_exp <- data.frame(Var_pc = foo, Cumulative_Var_pc = cumsum(foo))
+print(var_exp)
+
+# Choose the number of PCs to include as covariates
+# - eg. in my dataset it's the first 3 PCs
+pcs_keep <- rownames(var_exp)[1:which(var_exp$Cumulative_Var_pc >= 95)[1]]
+
+# Join into pheno data frame
+ctp_pc <- inner_join(ctp, data.frame(IID = rownames(ctp.pcx$scores), ctp.pcx$scores[,pcs_keep]), by = "IID", type = "inner")
+ctp_pc <- ctp_pc %>% mutate(MatchDx = match(dx, c("CTL", "AZD"))) %>% mutate(dx = fct_reorder(dx, MatchDx)) %>% dplyr::select(-c("MatchDx"))
+
+# Write table
+saveRDS(ctp_pc, paste(out_dir, "/ctp_noclr_pc95_", studyn, ".rds", sep = ""))
+
+# Run model
+mod0 <- lrm(dx ~ age + sex + batch, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)))
+mod1 <- lrm(dx ~ age + sex + batch + Comp.1 + Comp.2 + Comp.3 + Comp.4, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)))
+
+mod0
+mod1
+lrtest(mod0, mod1)
+
+modx <- lrm(dx ~ Comp.1 + Comp.2 + Comp.3 + Comp.4, x = TRUE, y = TRUE, data = ctp_pc %>% filter(study == all_of(studyn)))
+modx
+
+saveRDS(mod0, paste(out_dir, "/ROSMAP_ctp_mod0.rds", sep = ""))
+saveRDS(mod1, paste(out_dir, "/ROSMAP_ctp_mod1.rds", sep = ""))
+
+```
+
+# Effect sizes of each cell-type of diagnosis
+
+## No adjustment for oligodendrocytes
+
+### ASDbrain
+
+#### No covariates
+
+- important for this study due to confounding of brain bank + age
+
+```{r, eval = FALSE}
+
+studyn <- "ASDbrain"
+
+tmp <- ctp %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID)
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Oligo <- ols(NonN_Oligo_MBP ~ dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc$coef, 
+  Inh = mod2.Inh$coef,
+  Astro = mod2.Astro$coef,
+  MicroEndo = mod2.MicroEndo$coef,
+  Oligo = mod2.Oligo$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error, 
+  Oligo = tidy(summary.lm(mod2.Oligo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo", "Oligo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo", "Oligo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_nocov.png", sep = ""))
+
+```
+
+#### Covariates
+
+```{r, eval = FALSE}
+
+studyn <- "ASDbrain"
+
+tmp <- ctp %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID)
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Oligo <- ols(NonN_Oligo_MBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.Exc.s <- robcov(mod2.Exc, cluster = tmp$IID)
+mod2.Inh.s <- robcov(mod2.Inh, cluster = tmp$IID)
+mod2.Astro.s <- robcov(mod2.Astro, cluster = tmp$IID)
+mod2.MicroEndo.s <- robcov(mod2.MicroEndo, cluster = tmp$IID)
+mod2.Oligo.s <- robcov(mod2.Oligo, cluster = tmp$IID)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc.s$coef, 
+  Inh = mod2.Inh.s$coef,
+  Astro = mod2.Astro.s$coef,
+  MicroEndo = mod2.MicroEndo.s$coef,
+  Oligo = mod2.Oligo.s$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error, 
+  Oligo = tidy(summary.lm(mod2.Oligo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo", "Oligo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo", "Oligo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_cov.png", sep = ""))
+
+```
+
+### LIBD
+
+```{r, eval = FALSE}
+
+studyn <- "LIBD"
+
+tmp <- ctp %>% filter(study == all_of(studyn))
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Oligo <- ols(NonN_Oligo_MBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc$coef, 
+  Inh = mod2.Inh$coef,
+  Astro = mod2.Astro$coef,
+  MicroEndo = mod2.MicroEndo$coef,
+  Oligo = mod2.Oligo$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error, 
+  Oligo = tidy(summary.lm(mod2.Oligo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo", "Oligo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo", "Oligo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_cov.png", sep = ""))
+
+```
+
+### ROSMAP
+
+```{r, eval = FALSE}
+
+studyn <- "ROSMAP"
+
+tmp <- ctp %>% filter(study == all_of(studyn))
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Oligo <- ols(NonN_Oligo_MBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc$coef, 
+  Inh = mod2.Inh$coef,
+  Astro = mod2.Astro$coef,
+  MicroEndo = mod2.MicroEndo$coef,
+  Oligo = mod2.Oligo$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error, 
+  Oligo = tidy(summary.lm(mod2.Oligo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo", "Oligo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo", "Oligo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_cov.png", sep = ""))
+
+```
+
+## Adjustment for oligodendrocytes
+
+### ASDbrain
+
+#### No covariates
+
+- important for this study due to confounding of brain bank + age
+
+```{r, eval = FALSE}
+
+studyn <- "ASDbrain"
+
+tmp <- ctp_adjoligo %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID)
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc$coef, 
+  Inh = mod2.Inh$coef,
+  Astro = mod2.Astro$coef,
+  MicroEndo = mod2.MicroEndo$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_nocov.png", sep = ""))
+
+```
+
+#### Covariates
+
+```{r, eval = FALSE}
+
+studyn <- "ASDbrain"
+
+tmp <- ctp_adjoligo %>% filter(study == all_of(studyn)) %>% filter(!IID %in% asd_exclude$IID)
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.Exc.s <- robcov(mod2.Exc, cluster = tmp$IID)
+mod2.Inh.s <- robcov(mod2.Inh, cluster = tmp$IID)
+mod2.Astro.s <- robcov(mod2.Astro, cluster = tmp$IID)
+mod2.MicroEndo.s <- robcov(mod2.MicroEndo, cluster = tmp$IID)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc.s$coef, 
+  Inh = mod2.Inh.s$coef,
+  Astro = mod2.Astro.s$coef,
+  MicroEndo = mod2.MicroEndo.s$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_cov.png", sep = ""))
+
+```
+
+### LIBD
+
+```{r, eval = FALSE}
+
+studyn <- "LIBD"
+
+tmp <- ctp_adjoligo %>% filter(study == all_of(studyn))
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc$coef, 
+  Inh = mod2.Inh$coef,
+  Astro = mod2.Astro$coef,
+  MicroEndo = mod2.MicroEndo$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_cov.png", sep = ""))
+
+```
+
+### ROSMAP
+
+```{r, eval = FALSE}
+
+studyn <- "ROSMAP"
+
+tmp <- ctp_adjoligo %>% filter(study == all_of(studyn))
+
+# - run OLS --> clustered SE to account for correlation
+mod2.Exc <- ols(Exc ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Inh <- ols(Inh ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.Astro <- ols(NonN_Astro_FGF3R ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+mod2.MicroEndo <- ols(NonN_Micro.Endo_TYROBP ~ age + sex + batch + dx, x = TRUE, y = TRUE, data = tmp)
+
+mod2.bhat <- as.matrix(data.frame(
+  Exc = mod2.Exc$coef, 
+  Inh = mod2.Inh$coef,
+  Astro = mod2.Astro$coef,
+  MicroEndo = mod2.MicroEndo$coef))
+
+mod2.se <- as.matrix(data.frame(
+  Exc = tidy(summary.lm(mod2.Exc))$std.error, 
+  Inh = tidy(summary.lm(mod2.Inh))$std.error, 
+  Astro = tidy(summary.lm(mod2.Astro))$std.error, 
+  MicroEndo = tidy(summary.lm(mod2.MicroEndo))$std.error))
+
+# Apply mashr, using hthe canonical method
+mash_data <- mash_set_data(mod2.bhat, mod2.se)
+# canonical method
+U.c <- cov_canonical(mash_data)
+m.c <- mash(mash_data, U.c)
+print(get_loglik(m.c),digits = 10)
+m.c.pm <- get_pm(m.c)
+m.c.sd <- get_psd(m.c)
+get_lfsr(m.c)
+
+# Forest plot for effect sizes
+mash_plot <- data.frame(celltype = c("Exc", "Inh", "Astro", "MicroEndo"), Post_mean = m.c.pm[grep("dx", rownames(m.c.pm)),], Post_SD = m.c.sd[grep("dx", rownames(m.c.pm)),])
+mash_plot$ci_l <- mash_plot$Post_mean - mash_plot$Post_SD
+mash_plot$ci_u <- mash_plot$Post_mean + mash_plot$Post_SD
+analysis_order <- c("Exc", "Inh", "Astro", "MicroEndo")
+mash_plot$MatchAnalysis <- match(mash_plot$celltype, analysis_order)
+mash_plot %>% mutate(celltype = fct_reorder(celltype, MatchAnalysis)) %>% ggplot(aes(y=celltype, x=Post_mean, xmin=ci_l, xmax=ci_u, colour = celltype))+ 
+  geom_point() + 
+  geom_errorbarh(height=.1) +
+  ggtitle(paste("mashr posterior mean per cell-type, for diagnosis in ", studyn, sep = "")) +
+  theme(legend.position = "none")
+ggsave(paste(out_dir, "/", studyn, "_CTPeffect_mashr_cov.png", sep = ""))
+
+```
+
+
+# Linear models for individual cell-type differences
+
+## Sub-types
+
+### clr, no adjustment for oligodendrocytes
+
+#### ASDbrain
+
+```{r}
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)))
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)))
+
+```
+
+#### LIBD
+
+```{r}
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude$IID)))
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude$IID)))
+
+```
+
+**Check confounding of batch for Exc and Oligo**
+
+```{r}
+
+## Check per-batch effect for Exc and Oligo
+
+summary(lm(Micro ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_289")))
+summary(lm(Micro ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_315")))
+print("N.B. Lieber_104 has CONTROLS ONLY")
+summary(lm(Micro ~ age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_104")))
+print("N.B. Lieber_30 has SCHIZOPHRENIA PATIENTS ONLY")
+summary(lm(Micro ~ age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_30")))
+summary(lm(Micro ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_244")))
+
+summary(lm(Micro ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315"))))
+summary(lm(Micro ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30"))))
+summary(lm(Micro ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30", "Lieber_104"))))
+summary(lm(Micro ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30", "Lieber_104"))))
+
+summary(lm(Oligo ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_289")))
+summary(lm(Oligo ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_315")))
+print("N.B. Lieber_104 has CONTROLS ONLY")
+summary(lm(Oligo ~ age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_104")))
+print("N.B. Lieber_30 has SCHIZOPHRENIA PATIENTS ONLY")
+summary(lm(Oligo ~ age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_30")))
+summary(lm(Oligo ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_244")))
+
+summary(lm(Oligo ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315"))))
+summary(lm(Oligo ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30"))))
+summary(lm(Oligo ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30", "Lieber_104"))))
+summary(lm(Oligo ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30", "Lieber_104"))))
+
+summary(lm(OPC ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_289")))
+summary(lm(OPC ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_315")))
+print("N.B. Lieber_104 has CONTROLS ONLY")
+summary(lm(OPC ~ age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_104")))
+print("N.B. Lieber_30 has SCHIZOPHRENIA PATIENTS ONLY")
+summary(lm(OPC ~ age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_30")))
+summary(lm(OPC ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch == "Lieber_244")))
+
+summary(lm(OPC ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315"))))
+summary(lm(OPC ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30"))))
+summary(lm(OPC ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30", "Lieber_104"))))
+summary(lm(OPC ~ dx + age + age2 + sex, data = ctp.clr.1e3 %>% filter(study == "LIBD") %>% filter(batch %in% c("Lieber_289", "Lieber_244", "Lieber_315", "Lieber_30", "Lieber_104"))))
+
+```
+
+#### ROSMAP
+
+```{r}
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx, data = ctp.clr.1e3 %>% filter(study == "ROSMAP")))
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ dx + age + age2 + sex + batch, data = ctp.clr.1e3 %>% filter(study == "ROSMAP")))
+
+```
+
+### clr, adjustment for oligodendrocytes
+
+#### ASDbrain
+
+```{r}
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, OPC) ~ dx, data = ctp_adjoligo.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)))
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, OPC) ~ dx + age + age2 + sex + batch, data = ctp_adjoligo.clr.1e3 %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)))
+
+```
+
+#### LIBD
+
+```{r}
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, OPC) ~ dx, data = ctp_adjoligo.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude$IID)))
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, OPC) ~ dx + age + age2 + sex + batch, data = ctp_adjoligo.clr.1e3 %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude$IID)))
+
+```
+
+#### ROSMAP
+
+```{r}
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, OPC) ~ dx, data = ctp_adjoligo.clr.1e3 %>% filter(study == "ROSMAP")))
+
+summary(lm(cbind(Exc, Inh, Astro, Endo, Micro, OPC) ~ dx + age + age2 + sex + batch, data = ctp_adjoligo.clr.1e3 %>% filter(study == "ROSMAP")))
+
+```
+
+## Neurons vs glia (no clr)
+
+```{r}
+
+summary(lm(Glial ~ dx, data = ctp %>% filter(study == "ASDbrain")))
+summary(lm(Glial ~ dx, data = ctp %>% filter(study == "LIBD")))
+summary(lm(Glial ~ dx, data = ctp %>% filter(study == "ROSMAP")))
+#summary(lm(mcc_NeuN_neg ~ dx, data = ctp))
+#summary(lm(h_NeuN_neg ~ dx, data = ctp))
+
+summary(lm(Glial ~ dx + age + age2 + sex + batch, data = ctp %>% filter(study =="ASDbrain")))
+summary(lm(Glial ~ dx + age + age2 + sex + batch, data = ctp %>% filter(study =="LIBD")))
+summary(lm(Glial ~ dx + age + age2 + sex + batch, data = ctp %>% filter(study =="ROSMAP")))
+#summary(lm(mcc_NeuN_neg ~ dx + age + sex + batch, data = ctp))
+#summary(lm(h_NeuN_neg ~ dx + age + sex + batch, data = ctp))
+
+```
