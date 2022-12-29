@@ -2,7 +2,35 @@
 
 This directory contains scripts used to perform brain_CTP deconvolution as described in Yap et al. 2023
 
-# Data
+# Quick start
+
+1. Download:
+
+	- target data:  `data/methylation_data.tar.gz`
+	
+	- reference data: `data/Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds` (methylation sequencing, Luo et al. 2022)
+
+2. Modify `estimate_ctp_houseman.R` to your directories and run
+
+3. Outputs:
+
+	- list containing
+	
+		- deconvolved brain CTPs of x7 cell-types using Luo et al. 2022
+	
+			- Neuronal: Excitatory, Inhibitory
+		
+			- Non-neuronal: Astrocytes, Endothelial cells, Microglia, Oligodendrocytes, Oligodendrocyte Progenitor Cells (OPCs)
+		
+		- deconvolved brain CTPs of x2 celltypes using Guintivano et al 2014 (commonly used reference implemented in minfi, provided here as comparison)
+	
+			- NeuN+
+		
+			- NeuN-
+		
+	- box and whisker plots visualising distributions of above brain CTPs
+
+# Data description
 
 Available within sub-directory: `data/`
 
@@ -39,7 +67,7 @@ The below files are listed in order of how they are generated
 
 -   processed methylation array cell-type marker probes: `dlpfc_450k_guintivano_rowftest_cell2.rds` (see Identification of cell-type specific methylome profiles -> Methylation array)
 
-# Scripts
+# Scripts description
 
 ## Deconvolution of brain CTPs
 
@@ -49,25 +77,25 @@ The relevant script is `estimate_ctp_houseman.R` which includes:
 
 -   requisite functions: 
 	
-		- 	`projectCelType` (performs Houseman 2012 deconvolution implemented in minfi by Aryee et al. 2014 Bioinformatics) 
+	- 	`projectCelType` (performs Houseman 2012 deconvolution implemented in minfi by Aryee et al. 2014 Bioinformatics) 
 		
-		-	`getErrorPerSample` (indicates quality of deconvolution, see Seiler-Vellame et al. 2022 biorXiv)
+	-	`getErrorPerSample` (indicates quality of deconvolution, see Seiler-Vellame et al. 2022 biorXiv)
 
 -   load libraries and read in inputs (see **Data**):
 
-		-   Target dataset of bulk methylation beta matrix: see `methylation_data.tar.gz` for examples (data used in the paper)
+	-   Target dataset of bulk methylation beta matrix: see `methylation_data.tar.gz` for examples (data used in the paper)
 
-		-   Reference dataset of methylation sequencing marker probes: `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+	-   Reference dataset of methylation sequencing marker probes: `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
 		
-		- 	Reference dataset of NeuN+/- array marker probes as comparison: `dlpfc_450k_guintivano_rowftest_cell2.rds`
+	- 	Reference dataset of NeuN+/- array marker probes as comparison: `dlpfc_450k_guintivano_rowftest_cell2.rds`
 
 -   munge reference and target datasets
 
 -   deconvolution using the 2 references 
 		
-		- 	methylation sequencing with 7 cell-types 
+	- 	methylation sequencing with 7 cell-types 
 		
-		- 	methylation array with 2 cell-types (for comparison)
+	- 	methylation array with 2 cell-types (for comparison)
 
 -   plot deconvolved CTPs
 
