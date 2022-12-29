@@ -4,12 +4,40 @@ This directory contains scripts used to perform brain_CTP deconvolution as descr
 
 ## Data
 
--   bulk methylation beta matrix: see `methylation_data.tar.gz` for examples (data used in the paper)
+Available within sub-directory: `data/`
 
--   processed methylation sequencing cell-type marker probes: `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+### Target dataset (bulk methylation array data to deconvolve): 
 
--   processed methylation array cell-type marker probes: `dlpfc_450k_guintivano_rowftest_cell2.rds`
+-   `methylation_data.tar.gz` contains compressed ROSMAP, LIBD, UCLA_ASD beta matrices (used in paper)
 
+### Methylation single-cell sequencing reference data (Luo et al. 2022)
+
+The below files are listed in order of how they are generated
+
+1.  raw data: available from NCBI GEO/SRA with accession number GSE140493 (Luo et al. 2022 Cell Genomics) [https://www.sciencedirect.com/science/article/pii/S2666979X22000271]
+
+2.   sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for probes with coverage \>=10
+
+    -   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
+
+    -   Total counts: `ilmn450kepic_aggto100bp_celltype_c10_MU.txt`
+
+3.   sequencing read counts at selected marker probes:
+
+    -   Methylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_M.rds`
+
+    -   Unmethylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_U.rds`
+
+    -   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
+
+4.   processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+
+	- 	**Start here for out-of-the-box brain CTP deconvolution**
+
+
+### Methylation array reference data (Guintivano et al. 2013)
+
+-   processed methylation array cell-type marker probes: `dlpfc_450k_guintivano_rowftest_cell2.rds` (see Identification of cell-type specific methylome profiles -> Methylation array)
 
 ## Scripts
 
@@ -85,31 +113,6 @@ This is the reference of choice used in Yap et al. 2023
         2.  \<=40% methylated in only 1 cell-type and \>=60% methylated in all other cell-types (ie. a marker probe that is down-methylated)
 
     4.  Format and output as `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
-
-Input bulk methylation data (ROSMAP, LIBD, UCLA_ASD):
-
--   `methylation_data.tar.gz`
-
-Single-cell methylome sequencing data used to identify marker probes
-
--   raw data: available from NCBI GEO/SRA with accession number GSE140493 (Luo et al. 2022 Cell Genomics) [https://www.sciencedirect.com/science/article/pii/S2666979X22000271]
-
--   sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for probes with coverage \>=10
-
-    -   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
-
-    -   Total counts: `ilmn450kepic_aggto100bp_celltype_c10_MU.txt`
-
--   sequencing read counts at selected marker probes:
-
-    -   Methylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_M.rds`
-
-    -   Unmethylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_U.rds`
-
-    -   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
-
--   processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
-
 
 #### Methylation array (Guintivano et al. 2014, 2 cell-types)
 
