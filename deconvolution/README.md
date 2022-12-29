@@ -46,17 +46,17 @@ The below files are listed in order of how they are generated
 
 2.   sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for probes with coverage \>=10
 
-    -   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
+	-   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
 
-    -   Total counts: `ilmn450kepic_aggto100bp_celltype_c10_MU.txt`
+	-   Total counts: `ilmn450kepic_aggto100bp_celltype_c10_MU.txt`
 
 3.   sequencing read counts at selected marker probes:
 
-    -   Methylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_M.rds`
+	-   Methylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_M.rds`
 
-    -   Unmethylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_U.rds`
+	-   Unmethylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_U.rds`
 
-    -   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
+	-   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
 
 4.   processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
 
