@@ -1,20 +1,58 @@
 # README: brain_CTP deconvolution script
 
-This directory contains scripts used to perform brain_CTP deconvolution as described in Yap et al. 2022.
+This directory contains scripts used to perform brain_CTP deconvolution as described in Yap et al. 2023
 
-## Scripts
-
-`estimate_ctp_houseman.R` : script to deconvolve brain CTPs
-
-**Start here** for "out-of-the-box" deconvolution as performed in Yap et al. 2022
-
-**Inputs**
+## Data
 
 -   bulk methylation beta matrix: see `methylation_data.tar.gz` for examples (data used in the paper)
 
--   processed marker probes: `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+-   processed methylation sequencing cell-type marker probes: `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
 
-`marker_probe_selection/` : folder contains additional scripts demonstrating how the marker probes in `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds` were selected.
+-   processed methylation array cell-type marker probes: `dlpfc_450k_guintivano_rowftest_cell2.rds`
+
+
+## Scripts
+
+### Deconvolution of brain CTPs
+
+**Start here** for "out-of-the-box" deconvolution, as performed in Yap et al. 2023
+
+The relevant script is `estimate_ctp_houseman.R` which includes:
+
+-   requisite functions: 
+	
+		- 	`projectCelType` (performs Houseman 2012 deconvolution implemented in minfi by Aryee et al. 2014 Bioinformatics) 
+		
+		-	`getErrorPerSample` (indicates quality of deconvolution, see Seiler-Vellame et al. 2022 biorXiv)
+
+-   load libraries and read in inputs (see **Data**):
+
+		-   Target dataset of bulk methylation beta matrix: see `methylation_data.tar.gz` for examples (data used in the paper)
+
+		-   Reference dataset of methylation sequencing marker probes: `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+		
+		- 	Reference dataset of NeuN+/- array marker probes as comparison: `dlpfc_450k_guintivano_rowftest_cell2.rds`
+
+-   munge reference and target datasets
+
+-   deconvolution using the 2 references 
+		
+		- 	methylation sequencing with 7 cell-types 
+		
+		- 	methylation array with 2 cell-types (for comparison)
+
+-   plot deconvolved CTPs
+
+
+### Identification of cell-type specific methylome profiles
+
+These scripts are included within the sub-directory: `marker_probe_selection/`
+
+#### Methylation sequencing (Luo et al. 2022, 7 cell-types)
+
+The below scripts demonstrate how the marker probes in `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds` were selected.
+
+This is the reference of choice used in Yap et al. 2023
 
 1.  `reference_munge.sh` : driver .sh script for initial pre-processing of raw sequencing count data (large files, best done on HPC)
 
@@ -48,15 +86,13 @@ This directory contains scripts used to perform brain_CTP deconvolution as descr
 
     4.  Format and output as `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
 
-## Data
-
 Input bulk methylation data (ROSMAP, LIBD, UCLA_ASD):
 
 -   `methylation_data.tar.gz`
 
 Single-cell methylome sequencing data used to identify marker probes
 
--   raw data: `www.[Ask Chongyuan]`
+-   raw data: available from NCBI GEO/SRA with accession number GSE140493 (Luo et al. 2022 Cell Genomics) [https://www.sciencedirect.com/science/article/pii/S2666979X22000271]
 
 -   sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for probes with coverage \>=10
 
@@ -73,3 +109,10 @@ Single-cell methylome sequencing data used to identify marker probes
     -   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
 
 -   processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+
+
+#### Methylation array (Guintivano et al. 2014, 2 cell-types)
+
+This data is available via Bioconductor (Jaffe and Kaminsky et al. 2022) [http://bioconductor.org/packages/release/data/experiment/html/FlowSorted.DLPFC.450k.html]
+
+1. `reference_munge_DLPFC_Guintivano.R`: identify marker probes using rowFtests - the default method in `minfi::estimateCellCounts`

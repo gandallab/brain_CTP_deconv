@@ -7,8 +7,8 @@
 #------------------------------------------------------------------------------
 # FUNCTIONS: READ IN FIRST
 
-# Houseman 2012 deconvolution implemented in minfi (Aryee et al. 2014)
-# minfi::projectCellType within estimateCellCounts.R 
+# Houseman 2012 deconvolution implemented in minfi (Aryee et al. 2014 Bioinformatics)
+# projectCellType (an internal function within minfi estimateCellCounts.R)
 # (https://rdrr.io/bioc/minfi/src/R/estimateCellCounts.R)
 # this function preferred here as requiring just methylation beta matrix 
 # is more flexible
@@ -112,26 +112,27 @@ library(csSAM)
 library(data.table)
 library(tidyverse)
 library(ggplot2)
-library(forcats)
 library(dplyr)
+library(ggsci)
 
 #------------------------------------------------------------------------------
 # Bulk data directory (DNA methylation beta matrix, batch corrected)
 #------------------------------------------------------------------------------
 
-input <- "txt"
-
 # Jaffe
+input <- "txt"
 data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/Jaffe2018/analysis"
 filen <- "Jaffe2018_age0_aut_mask_t"
 meth_dir <- paste(data_dir, "/", filen, ".txt", sep = "")
 
 # ASD brain
+input <- "txt"
 data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ASD_methylation_brain/analysis"
 filen <- "KCL_R01MH094714_ASD_Illumina450K_PFC"
 meth_dir <- paste(data_dir, "/", filen, ".csv", sep = "")
 
 # ROSMAP (own batch correction)
+input <- "txt"
 data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/ROSMAP/analysis"
 filen <- "ROSMAP_aut_mask_t"
 meth_dir <- paste(data_dir, "/", filen, ".txt", sep = "")
@@ -148,6 +149,10 @@ meth_dir <- paste(data_dir, "/", filen, ".rdat", sep = "")
 
 # Coefficients from sequencing data
 coefs_seq_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds"
+refn_seq <- "Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta"
+
+coefs_neun_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/dlpfc_450k_guintivano/dlpfc_450k_guintivano_rowftest_cell2.rds"
+refn_guintivano 
 
 #------------------------------------------------------------------------------
 # Read-in + QC of bulk + reference
@@ -165,48 +170,58 @@ if (input == "txt") {
 
     load(meth_dir)
     meth <- betas
+    
+} else if (input == "mSet") {
+  
+    meth <- getBeta(meth_dir)
+  
 }
 
 # Reference probes, order, and overlap with methylation matrix
 # Formatted as a list here, as it gives flexibility to deconvolve 
-# 1 methylation beta matrix with multiple different reference
+# one methylation beta matrix with multiple different reference
 # panels for comparison
 coefs_seq <- readRDS(coefs_seq_dir)
-coefs_seq.ls <- list(coefs_seq)
-coefs_seq.ls <- lapply(coefs_seq.ls, function(x) x[order(rownames(x)),])
-coefs_seq.ls <- lapply(coefs_seq.ls, function(x) x[which(rownames(x) %in% rownames(meth)),])
+coefs_neun <- readRDS(coefs_neun_dir)
+coefs.ls <- list(coefs_seq, coefs_neun)
+coefs.ls <- lapply(coefs.ls, function(x) x[order(rownames(x)),])
+coefs.ls <- lapply(coefs.ls, function(x) x[which(rownames(x) %in% rownames(meth)),])
 
 #==============================================================================
 # DECONVOLUTION
 #==============================================================================
 
 # Deconvolve CTP
-ctp_seq.ls <- lapply(coefs_seq.ls, function(x) projectCellType(meth[which(rownames(meth) %in% (rownames(x))), ], x, lessThanOne = TRUE))
+ctp.ls <- lapply(coefs.ls, function(x) projectCellType(meth[which(rownames(meth) %in% (rownames(x))), ], x, lessThanOne = TRUE))
 
 # Add errors
-ctp_seq_error.ls <- lapply(1:length(ctp_seq.ls), function(y) data.frame(IID = rownames(ctp_seq.ls[[y]]), ctp_seq.ls[[y]], error =
-    sapply(1:nrow(ctp_seq.ls[[y]]), function(x) getErrorPerSample(x, 
-        ctp_seq.ls[[y]], 
-        coefs_seq.ls[[y]][which(rownames(coefs_seq.ls[[y]]) %in% rownames(meth)),], 
-        meth[which(rownames(meth) %in% (rownames(coefs_seq.ls[[y]]))), ]))))
-names(ctp_seq_error.ls) <- names(ctp_seq.ls)
+ctp_error.ls <- lapply(1:length(ctp.ls), function(y) data.frame(IID = rownames(ctp.ls[[y]]), ctp.ls[[y]], error =
+    sapply(1:nrow(ctp.ls[[y]]), function(x) getErrorPerSample(x, 
+        ctp.ls[[y]], 
+        coefs.ls[[y]][which(rownames(coefs.ls[[y]]) %in% rownames(meth)),], 
+        meth[which(rownames(meth) %in% (rownames(coefs.ls[[y]]))), ]))))
+names(ctp_error.ls) <- names(ctp.ls)
 
 # Write output
-saveRDS(ctp_seq_error.ls, paste(data_dir, "/", filen, "_Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_houseman_ls.rds", sep = ""))
+saveRDS(ctp_error.ls, paste(data_dir, "/", filen, "_", refn_seq, ".rds", sep = ""))
 
-# Plots
-# seq
-ctp_seq.long.ls <- lapply(ctp_seq_error.ls, function(x) melt(x, id.var = "IID", variable.name = "celltype", value.name = "CTP"))
+#==============================================================================
+# PLOT
+#==============================================================================
+
+ctp.long.ls <- lapply(ctp_error.ls, function(x) melt(x, id.var = "IID", variable.name = "celltype", value.name = "CTP"))
 # - add comparison identifier
-compar <- names(ctp_seq.long.ls)
-compar <- c("markers_Luo2020")
-tmp.ls <- mapply(cbind, ctp_seq.long.ls, "comparison"=compar, SIMPLIFY=F)
+compar <- names(ctp.long.ls)
+compar <- c("Luo2022_seq", "Guintivano2013_array")
+tmp.ls <- mapply(cbind, ctp.long.ls, "comparison"=compar, SIMPLIFY=F)
 # - append list elements
-ctp_seq.long.df <- do.call(rbind, tmp.ls)
-ctp_seq.gg <- ctp_seq.long.df %>% 
-        ggplot(aes(x=celltype, y=CTP, colour=celltype)) + 
+ctp.long.df <- do.call(rbind, tmp.ls)
+ctp.gg <- ctp.long.df %>% 
+        ggplot(aes(x = celltype, y = CTP, colour = celltype)) + 
         geom_boxplot() + 
-        theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1)) +
-        facet_wrap(~comparison) +
+        theme_bw() +
+        theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1)) +
+        scale_colour_aaas() +
+        facet_grid(~ comparison, scales = "free_x", space = "free_x") +
         geom_hline(yintercept = 0.1, linetype = "dashed", color = "gray20")
-ggsave(paste(data_dir, "/", filen, "_Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_houseman_ls.png", sep = ""), ctp_seq.gg)
+ggsave(paste(data_dir, "/", filen, "_", refn_seq, ".png", sep = ""), ctp.gg)
