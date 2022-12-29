@@ -2,15 +2,15 @@
 
 This directory contains scripts used to perform brain_CTP deconvolution as described in Yap et al. 2023
 
-## Data
+# Data
 
 Available within sub-directory: `data/`
 
-### Target dataset (bulk methylation array data to deconvolve): 
+## Target dataset (bulk methylation array data to deconvolve): 
 
 -   `methylation_data.tar.gz` contains compressed ROSMAP, LIBD, UCLA_ASD beta matrices (used in paper)
 
-### Methylation single-cell sequencing reference data (Luo et al. 2022)
+## Methylation single-cell sequencing reference data (Luo et al. 2022)
 
 The below files are listed in order of how they are generated
 
@@ -35,13 +35,13 @@ The below files are listed in order of how they are generated
 	- 	**Start here for out-of-the-box brain CTP deconvolution**
 
 
-### Methylation array reference data (Guintivano et al. 2013)
+## Methylation array reference data (Guintivano et al. 2013)
 
 -   processed methylation array cell-type marker probes: `dlpfc_450k_guintivano_rowftest_cell2.rds` (see Identification of cell-type specific methylome profiles -> Methylation array)
 
-## Scripts
+# Scripts
 
-### Deconvolution of brain CTPs
+## Deconvolution of brain CTPs
 
 **Start here** for "out-of-the-box" deconvolution, as performed in Yap et al. 2023
 
@@ -72,11 +72,11 @@ The relevant script is `estimate_ctp_houseman.R` which includes:
 -   plot deconvolved CTPs
 
 
-### Identification of cell-type specific methylome profiles
+## Identification of cell-type specific methylome profiles
 
 These scripts are included within the sub-directory: `marker_probe_selection/`
 
-#### Methylation sequencing (Luo et al. 2022, 7 cell-types)
+### Methylation sequencing (Luo et al. 2022, 7 cell-types)
 
 The below scripts demonstrate how the marker probes in `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds` were selected.
 
@@ -114,7 +114,7 @@ This is the reference of choice used in Yap et al. 2023
 
     4.  Format and output as `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
 
-#### Methylation array (Guintivano et al. 2014, 2 cell-types)
+### Methylation array (Guintivano et al. 2014, 2 cell-types)
 
 This data is available via Bioconductor (Jaffe and Kaminsky et al. 2022) [http://bioconductor.org/packages/release/data/experiment/html/FlowSorted.DLPFC.450k.html]
 
