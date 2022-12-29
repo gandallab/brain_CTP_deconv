@@ -28,7 +28,7 @@ This directory contains scripts used to perform brain_CTP deconvolution as descr
 		
 			- NeuN-
 		
-	- box and whisker plots visualising distributions of above brain CTPs
+	- box and whisker plots visualising distributions of above brain CTPs (example below from UCLA_ASD deconvolution)
 	
 	![image](https://user-images.githubusercontent.com/19381296/209908003-cbf6b3af-42e6-4f6b-abc4-596716cb72a0.png)
 
