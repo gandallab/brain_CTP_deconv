@@ -14,15 +14,15 @@ This directory contains scripts used to perform brain_CTP deconvolution as descr
 
 3. Outputs:
 
-	- list containing
+	- .rds containing R list with:
 	
-		- deconvolved brain CTPs of x7 cell-types using Luo et al. 2022
+		- table of deconvolved brain CTPs of x7 cell-types using Luo et al. 2022
 	
 			- Neuronal: Excitatory, Inhibitory
 		
 			- Non-neuronal: Astrocytes, Endothelial cells, Microglia, Oligodendrocytes, Oligodendrocyte Progenitor Cells (OPCs)
 		
-		- deconvolved brain CTPs of x2 celltypes using Guintivano et al 2014 (commonly used reference implemented in minfi, provided here as comparison)
+		- table of deconvolved brain CTPs of x2 celltypes using Guintivano et al 2014 (commonly used reference implemented in minfi, provided here as comparison)
 	
 			- NeuN+
 		
