@@ -44,13 +44,13 @@ The below files are listed in order of how they are generated
 
 1.  raw data: available from NCBI GEO/SRA with accession number GSE140493 (Luo et al. 2022 Cell Genomics) [https://www.sciencedirect.com/science/article/pii/S2666979X22000271]
 
-2.   sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for probes with coverage \>=10
+2.  sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for probes with coverage \>=10
 
 	-   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
 
 	-   Total counts: `ilmn450kepic_aggto100bp_celltype_c10_MU.txt`
 
-3.   sequencing read counts at selected marker probes:
+3.  sequencing read counts at selected marker probes:
 
 	-   Methylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_M.rds`
 
@@ -58,7 +58,7 @@ The below files are listed in order of how they are generated
 
 	-   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
 
-4.   processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+4.  processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
 
 	- 	**Start here for out-of-the-box brain CTP deconvolution**
 
