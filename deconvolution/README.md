@@ -108,9 +108,9 @@ These scripts are included within the sub-directory: `marker_probe_selection/`
 
 ### Methylation sequencing (Luo et al. 2022, 7 cell-types)
 
-The below scripts demonstrate how the marker probes in `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds` were selected.
+***This is the reference of choice used in Yap et al. 2023***
 
-This is the reference of choice used in Yap et al. 2023
+The below scripts demonstrate how the marker probes in `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds` were selected.
 
 1.  `reference_munge.sh` : driver .sh script for initial pre-processing of raw sequencing count data (large files, best done on HPC)
 
