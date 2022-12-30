@@ -30,12 +30,19 @@ We also experimented with a variety of marker probe identification methods.
 
 Analyses for brain CTP differences associated with diagnosis, age and sex.
 
-Paired .Rmd and .html files for:
+Contains paired .Rmd and .html files for:
 
-- `ctp_differences`: includes exploratory data anlyses for diagnosis, age and sex differences for the ROSMAP, LIBD and UCLA_ASD datasets, experimenting with covariates, transformations and statistical methods.
+- `ctp_differences`: includes exploratory data anlyses for diagnostic, age and sex differences for the ROSMAP, LIBD and UCLA_ASD datasets, experimenting with covariates, transformations and statistical methods.
 - `ctp_differences_local_plots`: this is really a continuation of above but this contains more of the finalised results of this analyses. 
 - `ctp_differences_replication_BDR`: equivalent analyses in the BDR replication dataset (for Alzheimer's disease)
 
 ## `3_pgs/`
 
+Analyses for associations between brain CTPs and polygenic scores for various neuropsychiatric traits.
+
+Contains paired .Rmd and .html files for:
+
+- `pgs_analysis`: exploratory, finalised, and sensitivity analyses for these analyses.
+
 ## `4_gwas/`
+
