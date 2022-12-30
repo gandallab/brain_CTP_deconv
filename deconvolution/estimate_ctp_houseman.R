@@ -119,6 +119,7 @@ library(ggsci)
 # Bulk data directory (DNA methylation beta matrix, batch corrected)
 #------------------------------------------------------------------------------
 
+# Download from Zenodo (see README)
 # Jaffe
 input <- "txt"
 data_dir <- "~/shared-gandalm/brain_CTP/Data/methylation/Jaffe2018/analysis"
@@ -147,7 +148,7 @@ meth_dir <- paste(data_dir, "/", filen, ".rdat", sep = "")
 # Reference data directory
 #------------------------------------------------------------------------------
 
-# Coefficients from sequencing data
+# Coefficients from sequencing data - download from: brain_CTP_deconv/deconvolution/data
 ref_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile"
 coefs_seq_dir <- paste(ref_dir, "/Luo2020/Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds", sep = "")
 coefs_neun_dir <- paste(ref_dir, "/dlpfc_450k_guintivano/dlpfc_450k_guintivano_rowftest_cell2.rds", sep = "")
