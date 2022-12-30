@@ -8,6 +8,7 @@ This repo contains code for the paper: Yap et al. 2023 "Genetic and methylomic i
 `deconvolution/`: brain CTP deconvolution pipeline scripts
 
 - ***Want to deconvolve your own bulk methylation array data (Illumina EPIC or 450K)?*** 
+- [Jump over to here!](https://github.com/gandallab/brain_CTP_deconv/tree/main/deconvolution)
 - This folder contains instructions and easy-to-use scripts and processed reference data (plus info on how we got there)
 
 `qc/`: methylation and genotyping QC scripts
