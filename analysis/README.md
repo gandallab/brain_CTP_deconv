@@ -26,6 +26,8 @@ We also experimented with a variety of marker probe identification methods.
 - For the sequencing-based reference data, we also tried a chi-squared method but found the "extremes" method was superior.
 - For the array-based reference data, we also tried the rowFtests method implemented in minfi. The results were extremely similar.
 
+![image](https://user-images.githubusercontent.com/19381296/210070664-495c5d78-51c9-464d-aec7-edd513e026f5.png)
+
 ## `2_ctp_differences/`
 
 Analyses for brain CTP differences associated with diagnosis, age and sex.
@@ -35,6 +37,8 @@ Folder contains paired .Rmd and .html files for:
 - `ctp_differences`: includes exploratory data anlyses for diagnostic, age and sex differences for the ROSMAP, LIBD and UCLA_ASD datasets, experimenting with covariates, transformations and statistical methods.
 - `ctp_differences_local_plots`: this is really a continuation of above but this contains more of the finalised results of this analyses. 
 - `ctp_differences_replication_BDR`: equivalent analyses in the BDR replication dataset (for Alzheimer's disease)
+
+![image](https://user-images.githubusercontent.com/19381296/210070731-11387d2b-2854-4825-a6be-ead83a1d5223.png)
 
 ## `3_pgs/`
 
@@ -46,6 +50,8 @@ Folder contains paired .Rmd and .html files for:
 - `pgs_analysis`: exploratory, finalised, and sensitivity analyses for these analyses.
 
 Scripts for PGS generation are provided in the `qc/` folder.
+
+![image](https://user-images.githubusercontent.com/19381296/210070771-f1717dde-f01d-4f5b-a409-9668d528c439.png)
 
 ## `4_gwas/`
 
