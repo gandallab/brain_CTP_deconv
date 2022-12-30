@@ -33,43 +33,6 @@ As described in the manuscript, the below deconvolution pipeline was identified 
 	
 	![image](https://user-images.githubusercontent.com/19381296/209908003-cbf6b3af-42e6-4f6b-abc4-596716cb72a0.png)
 
-# Data description
-
-Available within sub-directory: `data/`
-
-## Target dataset (bulk methylation array data to deconvolve): 
-
--   `methylation_data.tar.gz` contains compressed ROSMAP, LIBD, UCLA_ASD beta matrices (used in paper)
-
-## Methylation single-cell sequencing reference data (Luo et al. 2022)
-
-The below files are listed in order of how they are generated
-
-1.  raw data: available from NCBI GEO/SRA with accession number GSE140493 ([Luo et al. 2022 Cell Genomics](https://www.sciencedirect.com/science/article/pii/S2666979X22000271))
-
-2.  sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for CpG sites with read coverage \>=10
-
-	-   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
-
-	-   Total counts: `ilmn450kepic_aggto100bp_celltype_c10_MU.txt`
-
-3.  sequencing read counts at selected marker probes:
-
-	-   Methylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_M.rds`
-
-	-   Unmethylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_U.rds`
-
-	-   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
-
-4.  processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
-
-	- 	**Start here for out-of-the-box brain CTP deconvolution**
-
-
-## Methylation array reference data (Guintivano et al. 2013)
-
--   processed methylation array cell-type marker probes: `dlpfc_450k_guintivano_rowftest_cell2.rds` (see Identification of cell-type specific methylome profiles -> Methylation array)
-
 # Scripts description
 
 ## Deconvolution of brain CTPs
@@ -150,3 +113,41 @@ The below scripts demonstrate how the marker probes in `Luo2020_extremes_dmr_ilm
 This data is available via Bioconductor ([Jaffe and Kaminsky et al. 2022)](http://bioconductor.org/packages/release/data/experiment/html/FlowSorted.DLPFC.450k.html)
 
 1. `reference_munge_DLPFC_Guintivano.R`: identify marker probes using rowFtests - the default method in `minfi::estimateCellCounts`
+
+# Data description
+
+Available within sub-directory: `data/`
+
+## Target dataset (bulk methylation array data to deconvolve): 
+
+-   `methylation_data.tar.gz` contains compressed ROSMAP, LIBD, UCLA_ASD beta matrices (used in paper)
+
+## Methylation single-cell sequencing reference data (Luo et al. 2022)
+
+The below files are listed in order of how they are generated
+
+1.  raw data: available from NCBI GEO/SRA with accession number GSE140493 ([Luo et al. 2022 Cell Genomics](https://www.sciencedirect.com/science/article/pii/S2666979X22000271))
+
+2.  sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for CpG sites with read coverage \>=10
+
+	-   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
+
+	-   Total counts: `ilmn450kepic_aggto100bp_celltype_c10_MU.txt`
+
+3.  sequencing read counts at selected marker probes:
+
+	-   Methylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_M.rds`
+
+	-   Unmethylated counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_U.rds`
+
+	-   Total counts: `ilmn450kepic_aggto100bp_c10_extremes_split6040all_celltype7_MU.rds`
+
+4.  processed marker probes for input into `estimate_ctp_houseman.R` : `Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds`
+
+	- 	**Start here for out-of-the-box brain CTP deconvolution**
+
+
+## Methylation array reference data (Guintivano et al. 2013)
+
+-   processed methylation array cell-type marker probes: `dlpfc_450k_guintivano_rowftest_cell2.rds` (see Identification of cell-type specific methylome profiles -> Methylation array)
+
