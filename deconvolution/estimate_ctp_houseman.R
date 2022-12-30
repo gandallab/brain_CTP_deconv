@@ -148,8 +148,9 @@ meth_dir <- paste(data_dir, "/", filen, ".rdat", sep = "")
 #------------------------------------------------------------------------------
 
 # Coefficients from sequencing data
-coefs_seq_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/Luo2020/Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds"
-coefs_neun_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile/dlpfc_450k_guintivano/dlpfc_450k_guintivano_rowftest_cell2.rds"
+ref_dir <- "~/shared-gandalm/brain_CTP/Data/reference_cell_profile"
+coefs_seq_dir <- paste(ref_dir, "/Luo2020/Luo2020_extremes_dmr_ilmn450kepic_aggto100bp_c10_cell7_split6040all_beta.rds", sep = "")
+coefs_neun_dir <- paste(ref_dir, "/dlpfc_450k_guintivano/dlpfc_450k_guintivano_rowftest_cell2.rds", sep = "")
 
 #------------------------------------------------------------------------------
 # Read-in + QC of bulk + reference
@@ -221,4 +222,4 @@ ctp.gg <- ctp.long.df %>%
         scale_colour_aaas() +
         facet_grid(~ comparison, scales = "free_x", space = "free_x") +
         geom_hline(yintercept = 0.1, linetype = "dashed", color = "gray20")
-ggsave(paste(data_dir, "/", filen, ".png", sep = ""), ctp.gg)
+ggsave(paste(data_dir, "/", filen, "_deconvolution_boxwhiskers.png", sep = ""), ctp.gg)
