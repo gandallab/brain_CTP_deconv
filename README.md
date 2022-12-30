@@ -3,7 +3,7 @@ Deconvolving brain cell-type proportions (brain CTP) from DNA methylation data.
 
 This repo contains code for 
 
-"Genetic and methylomic interrogation of cellular vulnerability to autism, schizophrenia, and Alzheimer’s disease in the human brain".
+**Genetic and methylomic interrogation of cellular vulnerability to autism, schizophrenia, and Alzheimer’s disease in the human brain**
 Chloe X Yap, Daniel D Vo, Matthew Heffel, Arjun Bhattacharya, Cindy Wen, Kathryn E Kemper, Jian Zeng, Zhili Zheng, Eilis Hannon, Dorothea Seiler Vellame, Alice Franklin, Christa Caggiano, Jonathan Mill, Noah Zaitlen, Alexander Gusev, Bogdan Pasaniuc, Chongyuan Luo, Michael J Gandal. (2023)
 
 ## Scripts
