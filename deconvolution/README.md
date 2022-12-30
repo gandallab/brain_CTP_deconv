@@ -1,7 +1,7 @@
 # README: brain_CTP deconvolution script
 
 This directory contains scripts used to perform brain_CTP deconvolution as described in Yap et al. 2023.
-As described in the manuscript, the below deconvolution pipeline was identified to be the best (at least when using the datasets available to us) after extensive testing of other deconvolution methods and marker probe identification methods. RMarkdown documents are provided in [a relative link](README.md)
+As described in the manuscript, the below deconvolution pipeline was identified to be the best (at least when using the datasets available to us) after extensive testing of other deconvolution methods and marker probe identification methods. RMarkdown documents demonstrating comparisons of different deconvolution methods are provided [here](https://github.com/gandallab/brain_CTP_deconv/tree/main/analysis)
 
 # Quick start
 
@@ -45,7 +45,7 @@ Available within sub-directory: `data/`
 
 The below files are listed in order of how they are generated
 
-1.  raw data: available from NCBI GEO/SRA with accession number GSE140493 (Luo et al. 2022 Cell Genomics) [https://www.sciencedirect.com/science/article/pii/S2666979X22000271]
+1.  raw data: available from NCBI GEO/SRA with accession number GSE140493 ([Luo et al. 2022 Cell Genomics](https://www.sciencedirect.com/science/article/pii/S2666979X22000271))
 
 2.  sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for CpG sites with read coverage \>=10
 
@@ -147,6 +147,6 @@ The below scripts demonstrate how the marker probes in `Luo2020_extremes_dmr_ilm
 
 ### Methylation array (Guintivano et al. 2014, 2 cell-types)
 
-This data is available via Bioconductor (Jaffe and Kaminsky et al. 2022) [http://bioconductor.org/packages/release/data/experiment/html/FlowSorted.DLPFC.450k.html]
+This data is available via Bioconductor ([Jaffe and Kaminsky et al. 2022)](http://bioconductor.org/packages/release/data/experiment/html/FlowSorted.DLPFC.450k.html)
 
 1. `reference_munge_DLPFC_Guintivano.R`: identify marker probes using rowFtests - the default method in `minfi::estimateCellCounts`
