@@ -1,0 +1,1221 @@
+---
+title: "PGS analysis"
+author: "Chloe Yap"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+---
+
+**To run**: Beforehand:
+
+    module load gcc
+
+In R:
+
+```{r, eval = FALSE}
+setwd("~/shared-gandalm/brain_CTP/Scripts/integration/pgs/pgs_analysis")
+rmarkdown::render("pgs_analysis.Rmd", "html_document")
+```
+
+# Set-up
+
+## Directories and libraries
+
+```{r}
+
+library(data.table)
+library(tidyverse)
+library(broom)
+library(ggplot2)
+library(wesanderson)
+library(ggrepel)
+library(GGally)
+library(DT)
+
+```
+
+```{r}
+
+asd_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.ASD_Grove2018_logOR.sbayesr.sscore"
+azd_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.AZD_Marioni2018.sbayesr.sscore"
+scz_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.SCZ_Pardinas2018.sbayesr.sscore"
+#scz_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.SCZ_Pardinas2018_v2.sbayesr.sscore"
+height_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.Height_Yengo2018.sbayesr.sscore"
+mdd_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.MDD_Howard2019.sbayesr.sscore"
+eduyears_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.EduYears_Lee2018.sbayesr.sscore"
+chronotype_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.Chronotype_Jones2019.sbayesr.sscore"
+iq_pgs_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/scores/ROSMAP_ASDbrain_LIBD_pgs.IQ_Savage2018.sbayesr.sscore"
+
+pheno_dir <- "~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/ctp_clr1e-3_aggregated_scz_asd_azd.txt"
+
+out_dir <- "~/shared-gandalm/brain_CTP/Data/integration/pgs/analysis"
+
+```
+
+## Read in data 
+
+```{r}
+
+asd_pgs <- read.delim(asd_pgs_dir, header = T, as.is = T)
+azd_pgs <- read.delim(azd_pgs_dir, header = T, as.is = T)
+scz_pgs <- read.delim(scz_pgs_dir, header = T, as.is = T)
+height_pgs <- read.delim(height_pgs_dir, header = T, as.is = T)
+mdd_pgs <- read.delim(mdd_pgs_dir, header = T, as.is = T)
+eduyears_pgs <- read.delim(eduyears_pgs_dir, header = T, as.is = T)
+#chronotype_pgs <- read.delim(chronotype_pgs_dir, header = T, as.is = T)
+#iq_pgs <- read.delim(iq_pgs_dir, header = T, as.is = T)
+
+pgs_trait_all <- TRUE
+
+# Change depending on analysis
+pgs_name <- c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "Height_PGS")
+pgs_name <- c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "EduYears_PGS", "MDD_PGS", "Height_PGS")
+#pgs_name <- c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "Height_PGS", "Chronotype_PGS", "IQ_PGS")
+
+pheno <- read.delim(pheno_dir, header = T, as.is = T)
+pheno$age2 <- pheno$age^2
+
+asd_exclude <- read.delim("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/asd_exclude_studybalance.id", header = F, as.is = T)
+scz_exclude <- read.delim("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/scz_exclude_studybalance.id", header = F, as.is = T)
+
+```
+
+## Munge into single data frame
+
+## All PGS together
+
+```{r}
+
+asd_pgs <- asd_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+azd_pgs <- azd_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+scz_pgs <- scz_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+height_pgs <- height_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+mdd_pgs <- mdd_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+eduyears_pgs <- eduyears_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+#chronotype_pgs <- chronotype_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+#iq_pgs <- iq_pgs %>% dplyr::select(c("IID", "SCORE1_AVG"))
+
+colnames(asd_pgs)[which(colnames(asd_pgs) == "SCORE1_AVG")] <- "asd_pgs_raw"
+colnames(azd_pgs)[which(colnames(azd_pgs) == "SCORE1_AVG")] <- "azd_pgs_raw"
+colnames(scz_pgs)[which(colnames(scz_pgs) == "SCORE1_AVG")] <- "scz_pgs_raw"
+colnames(height_pgs)[which(colnames(height_pgs) == "SCORE1_AVG")] <- "height_pgs_raw"
+colnames(mdd_pgs)[which(colnames(mdd_pgs) == "SCORE1_AVG")] <- "mdd_pgs_raw"
+colnames(eduyears_pgs)[which(colnames(eduyears_pgs) == "SCORE1_AVG")] <- "eduyears_pgs_raw"
+#colnames(chronotype_pgs)[which(colnames(chronotype_pgs) == "SCORE1_AVG")] <- "chronotype_pgs_raw"
+#colnames(iq_pgs)[which(colnames(iq_pgs) == "SCORE1_AVG")] <- "iq_pgs_raw"
+
+pgs <- inner_join(asd_pgs, azd_pgs, by = "IID")
+pgs <- inner_join(pgs, scz_pgs, by = "IID")
+pgs <- inner_join(pgs, height_pgs, by = "IID")
+
+if (pgs_trait_all == TRUE) {
+  pgs <- inner_join(pgs, mdd_pgs, by = "IID")
+  pgs <- inner_join(pgs, eduyears_pgs, by = "IID")
+  #pgs <- inner_join(pgs, chronotype_pgs, by = "IID")
+  #pgs <- inner_join(pgs, iq_pgs, by = "IID")
+}
+colnames(pgs)[which(colnames(pgs) == "IID")] <- "genoid"
+
+# becuase of temporary duplicated merged bfile
+pgs <- pgs[!duplicated(pgs),]
+
+```
+
+## Make a genoid file for PGS dataframe
+
+```{r}
+
+rosmap_id <- read.delim("~/shared-gandalm/GenomicDatasets/ROSMAP/ROSMAP_metadata/ROSMAP_wgs_id_fordatalinkage.txt", header = T, as.is = T)
+rosmap_genoid <- rosmap_id[,c("individualID", "specimenID")]
+colnames(rosmap_genoid) <- c("IID", "genoid")
+
+libd_id <- read.delim("~/shared-gandalm/GenomicDatasets/LIBD_phase2/methyl/Jaffe_methylation_DLPFC/pheno/GSE74193_series_matrix_pheno_keep_df.txt", header = T, as.is = T)
+libd_genoid <- libd_id[,c("ID", "brnum")]
+colnames(libd_genoid) <- c("IID", "genoid")
+
+asdbrain_id <- read.csv("~/shared-gandalm/brain_CTP/Data/pheno/ASD_methylation_brain/Wong_ASD_Brain_Methylation_SuppTable1_pheno.csv")
+asdbrain_genoid <- asdbrain_id[,c("SampleName", "BrainID")]
+colnames(asdbrain_genoid) <- c("IID", "genoid")
+
+# Combine together and save
+genoid <- rbind(rosmap_genoid, libd_genoid, asdbrain_genoid)
+write.table(genoid, paste(out_dir, "/ROSMAP_LIBD_ASDbrain_genoid_IID.id", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+# Write table with genoid overlapping with pheno
+genoid_ctp <- genoid[which(genoid$IID %in% pheno$IID),]
+write.table(genoid_ctp[,c(2,2,1)], paste("~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/ROSMAP_LIBD_ASDbrain_genoid_IID_brainCTP.id", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+```
+
+## Join all files together into one (n=1056)
+
+```{r}
+
+pgs_genoid <- inner_join(genoid, pgs, by = "genoid")
+pgs_pheno <- inner_join(pheno, pgs_genoid)
+
+```
+
+## Filter for EUR only
+
+```{r}
+
+rosmap_pop <- read.delim("~/shared-gandalm/GenomicDatasets/ROSMAP/ROSMAP_WGS/qc_check/pc_and_population.txt", header = T, as.is = T)
+libd_pop <- read.delim("~/shared-gandalm/brain_CTP/Data/genotyping/Jaffe2018/merge_arrays/pc_and_population_Illumina_1M_Illumina_h650.txt", header = T, as.is = T)
+asdbrain_pop <- read.delim("~/shared-gandalm/GenomicDatasets/PsychENCODE/Genotypes/IndividualStudies/UCLA_ASD_synapse/grm/pc_and_population.txt", header = T, as.is = T)
+asdbrain_pop$IID <- gsub("/", "_", asdbrain_pop$IID)
+
+pop <- rbind(rosmap_pop, libd_pop, asdbrain_pop)
+pop_ctp <- pop %>% filter(IID %in% pgs_pheno$genoid)
+pop_eur <- pop %>% filter(population == "EUR") %>% mutate(genoid = IID)
+pop_ctp_eur <- pop %>% filter(IID %in% pop_ctp$IID) %>% filter(IID %in% pop_eur$IID)
+
+write.table(pop, "~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/pc_and_population_ROSMAP_LIBD_ASDbrain.txt", col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pop_eur, "~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/pc_and_population_ROSMAP_LIBD_ASDbrain_EUR.txt", col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pop_ctp_eur, "~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/pc_and_population_ROSMAP_LIBD_ASDbrain_brainCTP_EUR.txt", col.names = T, row.names = F, quote = F, sep = "\t")
+
+pgs_pheno_eur0 <- pgs_pheno %>% filter(genoid %in% pop_eur$genoid)
+
+```
+
+**Write tables**
+
+```{r}
+
+ctp_pc <- readRDS("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/ctp_noclr_pc_ROSMAP_ASDbrain_LIBD.rds")
+tmp <- inner_join(pheno, ctp_pc[,c(1, grep("Comp", colnames(ctp_pc)))], by = "IID")
+pgs_pheno_ctp_pc <- inner_join(tmp, pgs_genoid, by = "IID")
+
+pgs_pheno_ctp_pc_pop <- inner_join(pgs_pheno_ctp_pc, data.frame(genoid = pop_ctp$IID, population = pop_ctp$population), by = "genoid")
+
+write.table(pgs_pheno_ctp_pc_pop, paste(out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_raw_allancestry.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+```
+
+**Counts of ancestral groups**
+
+```{r}
+
+pop %>% group_by(str, population) %>% dplyr::summarise(n=n()) %>% pivot_wider(names_from = population, values_from = n) %>% mutate(total = sum(AFR, EUR, other, EAS, SAS, na.rm = T))
+pop_ctp %>% group_by(str, population) %>% dplyr::summarise(n=n()) %>% pivot_wider(names_from = population, values_from = n) %>% mutate(total = sum(AFR, EUR, other, EAS, SAS, na.rm = T))
+pop_ctp_eur %>% group_by(str, population) %>% dplyr::summarise(n=n())
+
+```
+
+## Add geno PCs
+
+- found that there were some outliers in PC1/2/3 of the EUR subset
+- further analysis found that this was due to sample relatedness: n=6 were sample duplicates, then removing the n=7 people removed based on GRM rel<0.05 made the outliers disappear
+- as this is only n=7/>850 people, decided to remove these relatives
+- this is desirable as then the PCs capture population stratification, rather than just close relatives
+
+```{r}
+
+genopc_eur <- read.table("~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/ROSMAP_ASDbrain_LIBD_imputed_MERGE_1_22_QC_EUR_brainCTP_ldprune_pca20.eigenvec", header = F, as.is = T)
+genopc123_eur <- genopc_eur[,2:5]
+colnames(genopc123_eur) <- c("genoid", "PC1", "PC2", "PC3")
+
+pgs_pheno_eur <- inner_join(pgs_pheno_eur0, genopc123_eur, by = "genoid")
+
+# Check ancestry clustering
+ggplot(pgs_pheno_eur, aes(x = PC1, y = PC2, colour = study, alpha = 0.2)) + geom_point() +   scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "")
+ggplot(pgs_pheno_eur, aes(x = PC1, y = PC3, colour = study, alpha = 0.2)) + geom_point() +  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "")
+ggplot(pgs_pheno_eur, aes(x = PC2, y = PC3, colour = study, alpha = 0.2)) + geom_point() +  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "")
+
+# Check outliers
+# print("Outliers based on SD of PC > 4")
+# pc1_sd <- sd(pgs_pheno_eur$PC1)
+# pc2_sd <- sd(pgs_pheno_eur$PC2)
+# pc3_sd <- sd(pgs_pheno_eur$PC3)
+# 
+# pgs_pheno_eur %>% filter(PC1/pc1_sd > 4) %>% datatable()
+# pgs_pheno_eur %>% filter(PC2/pc2_sd > 4) %>% datatable()
+# pgs_pheno_eur %>% filter(PC3/pc3_sd > 4) %>% datatable()
+# 
+# eur_outliers <- pgs_pheno_eur %>% filter((PC1/pc1_sd > 4) | (PC2/pc2_sd > 4) | (PC3/pc3_sd > 4))
+# write.table(eur_outliers[,c("genoid", "genoid")], "~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/ROSMAP_ASDbrain_LIBD_EUR_outliers_PC123sd4.id", col.names = T, row.names = F, quote = F, sep = "\t")
+
+```
+
+### Check PCA, removing EUR outliers (which are driven by close relatives)
+
+```{r}
+# Remove ROSMAP outliers based on PC2
+# rosmap2_outliers <- pgs_pheno_eur %>% filter(PC3 < -0.5)
+# write.table(rosmap2_outliers[,c("genoid", "genoid")], "~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/ROSMAP_ASDbrain_LIBD_EUR_outliers_PC123_PC3ROSMAP2.id", col.names = F, row.names = F, quote = F, sep = "\t")
+
+# Exclude the following specimenID
+# SM-CTEIJ
+# SM-CTEMN
+# SM-CTEI8
+# SM-CTEN3
+# SM-CTED9
+# SM-CTEE2
+
+# The below PCA still includes relatives. It shows taht keeping relatives means that the PCs capture family structure rather than population structure
+# genopc_eur <- read.table("~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/ROSMAP_ASDbrain_LIBD_imputed_MERGE_1_22_QC_EUR_brainCTP_ldprune_exclROSMAPoutlier_pca20.eigenvec", header = F, as.is = T)
+
+# This PCA removes all relatives (rel < 0.05)
+genopc_eur <- read.table("~/shared-gandalm/brain_CTP/Data/genotyping/megaanalysis/ROSMAP_ASDbrain_LIBD_imputed_MERGE_1_22_QC_EUR_brainCTP_rel0.05_ldprune_pca20.eigenvec", header = F, as.is = T)
+genopc123_eur <- genopc_eur[,2:5]
+colnames(genopc123_eur) <- c("genoid", "PC1", "PC2", "PC3")
+
+pgs_pheno_eur <- inner_join(pgs_pheno_eur0, genopc123_eur, by = "genoid")
+
+# Check ancestry clustering
+ggplot(pgs_pheno_eur, aes(x = PC1, y = PC2, colour = study, alpha = 0.2)) + geom_point() +   scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "")
+ggplot(pgs_pheno_eur, aes(x = PC1, y = PC3, colour = study, alpha = 0.2)) + geom_point() +  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "")
+ggplot(pgs_pheno_eur, aes(x = PC2, y = PC3, colour = study, alpha = 0.2)) + geom_point() +  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "")
+
+```
+
+## Standardise to control groups
+
+```{r}
+
+asd_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(asd_pgs_raw) %>% mean()
+asd_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(asd_pgs_raw) %>% sd()
+azd_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(azd_pgs_raw) %>% mean()
+azd_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(azd_pgs_raw) %>% sd()
+scz_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(scz_pgs_raw) %>% mean()
+scz_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(scz_pgs_raw) %>% sd()
+height_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(height_pgs_raw) %>% mean()
+height_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(height_pgs_raw) %>% sd()
+
+pgs_pheno_eur <- pgs_pheno_eur %>% 
+  mutate(ASD_PGS = (asd_pgs_raw - asd_pgs_ctl_mean)/asd_pgs_ctl_sd) %>% 
+  mutate(AZD_PGS = (azd_pgs_raw - azd_pgs_ctl_mean)/azd_pgs_ctl_sd) %>% 
+  mutate(SCZ_PGS = (scz_pgs_raw - scz_pgs_ctl_mean)/scz_pgs_ctl_sd) %>%
+  mutate(Height_PGS = (height_pgs_raw - height_pgs_ctl_mean)/height_pgs_ctl_sd)
+
+if (pgs_trait_all == TRUE) {
+  mdd_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(mdd_pgs_raw) %>% mean()
+  mdd_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(mdd_pgs_raw) %>% sd()
+  eduyears_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(eduyears_pgs_raw) %>% mean()
+  eduyears_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(eduyears_pgs_raw) %>% sd()
+#  chronotype_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(chronotype_pgs_raw) %>% mean()
+#  chronotype_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(chronotype_pgs_raw) %>% sd()
+#  iq_pgs_ctl_mean <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(iq_pgs_raw) %>% mean()
+#  iq_pgs_ctl_sd <- pgs_pheno_eur %>% filter(dx == "CTL") %>% pull(iq_pgs_raw) %>% sd()
+
+  pgs_pheno_eur <- pgs_pheno_eur %>% 
+  mutate(MDD_PGS = (mdd_pgs_raw - mdd_pgs_ctl_mean)/mdd_pgs_ctl_sd) %>%
+  mutate(EduYears_PGS = (eduyears_pgs_raw - eduyears_pgs_ctl_mean)/eduyears_pgs_ctl_sd)
+#  mutate(Chronotype_PGS = (chronotype_pgs_raw - chronotype_pgs_ctl_mean)/chronotype_pgs_ctl_sd) %>%
+#  mutate(IQ_PGS = (iq_pgs_raw - iq_pgs_ctl_mean)/iq_pgs_ctl_sd)
+}
+  
+MatchDx <- match(pgs_pheno_eur$dx, c("CTL", "ASD", "SCZ", "AZD"))
+pgs_pheno_eur$dx <- fct_reorder(pgs_pheno_eur$dx, MatchDx)
+
+```
+
+## Write output table
+
+```{r, eval = F}
+
+write.table(pgs_pheno_eur, paste(out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.txt", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+pgs_pheno_eur %>% group_by(study, dx) %>% dplyr::summarise(n=n())
+pgs_pheno_eur %>% group_by(study, dx) %>% filter(!is.na(age) | !is.na(sex)) %>% dplyr::summarise(n=n())
+
+pheno_out_dir <- "~/shared-gandalm/brain_CTP/Data/integration/gcta/pheno/ROSMAP_LIBD_ASDbrain"
+
+# Try and see if removing low clr-transformed values improves h2
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$Exc >= -2), c("genoid", "genoid", "Exc")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_neg2_Exc.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$Inh >= -2), c("genoid", "genoid", "Inh")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_neg2_Inh.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$Astro >= -2), c("genoid", "genoid", "Astro")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_neg2_Astro.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$Endo >= -2), c("genoid", "genoid", "Endo")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_neg2_Endo.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$Micro >= -2), c("genoid", "genoid", "Micro")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_neg2_Micro.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$Oligo >= -2), c("genoid", "genoid", "Oligo")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_neg2_Oligo.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$OPC >= -2), c("genoid", "genoid", "OPC")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_neg2_OPC.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+# clr-transformed data
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "Exc")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_Exc.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "Inh")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_Inh.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "Astro")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_Astro.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "Endo")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_Endo.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "Micro")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_Micro.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "Oligo")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_Oligo.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "OPC")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.hseq_clr1e3_OPC.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "age", "PC1", "PC2", "PC3")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.age_genoPC123.qcov", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "age", "age2", "PC1", "PC2", "PC3")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.age_age2_genoPC123.qcov", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "sex", "batch", "dx")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.sex_batch_dx.cov", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(pgs_pheno_eur[,c("genoid", "genoid", "sex", "batch")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.sex_batch.cov", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+# Write CTP PCs
+ctp_pc <- readRDS("~/shared-gandalm/brain_CTP/Data/integration/ctp_differences/ctp_noclr_pc_ROSMAP_ASDbrain_LIBD.rds")
+ctp_pc_genoid <- inner_join(genoid, ctp_pc, by = "IID")
+write.table(ctp_pc_genoid[,c("genoid", "genoid", "Comp.1")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.ctp_pc1.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(ctp_pc_genoid[,c("genoid", "genoid", "Comp.2")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.ctp_pc2.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(ctp_pc_genoid[,c("genoid", "genoid", "Comp.3")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.ctp_pc3.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(ctp_pc_genoid[,c("genoid", "genoid", "Comp.4")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.ctp_pc4.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(ctp_pc_genoid[,c("genoid", "genoid", "Comp.5")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.ctp_pc5.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+write.table(ctp_pc_genoid[,c("genoid", "genoid", "Comp.6")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.ctp_pc6.pheno", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+
+# CTL IDs
+write.table(pgs_pheno_eur[which(pgs_pheno_eur$dx == "CTL"),c("genoid", "genoid")], paste(pheno_out_dir, "/ROSMAP_LIBD_ASDbrain_pheno_pgs_EUR.CTL.id", sep = ""), col.names = T, row.names = F, quote = F, sep = "\t")
+
+```
+
+# Check distributions
+
+## Plot distribution
+
+```{r}
+
+pgs_pheno_eur.long <- melt(pgs_pheno_eur, measure.vars = c(all_of(pgs_name)), variable.name = "Trait", value.name = "PGS")
+
+mean.df <- pgs_pheno_eur.long %>% group_by(study, dx, Trait) %>% dplyr::summarise(mean = mean(PGS))
+matchDx <- match(mean.df$dx, c("CTL", "ASD", "SCZ", "AZD"))
+
+pgs_pheno_eur.long %>%
+  mutate(MatchDx = match(dx, c("CTL", "ASD", "SCZ", "AZD"))) %>%
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS", "Height_PGS"))) %>%
+  mutate(dx = fct_reorder(dx, MatchDx)) %>% 
+  #mutate(MatchTrait = match(Trait, all_of(pgs_name))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = PGS, fill = dx)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data=mean.df, aes(xintercept=mean, colour=dx), linetype="dashed", size=0.5) +
+  facet_grid(Trait ~ study) +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw()
+
+ggsave(paste(out_dir, "/pgs_EUR_studyxdx_distribution.svg", sep = ""), height = 10, width = 7)
+ggsave(paste(out_dir, "/pgs_EUR_studyxdx_distribution.png", sep = ""), height = 10, width = 7)
+
+mean.df2 <- pgs_pheno_eur.long %>% group_by(study, dx, Trait) %>% dplyr::summarise(mean = mean(PGS)) %>% filter((study == "ASDbrain" & Trait == "ASD_PGS") | (study == "LIBD" & Trait == "SCZ_PGS") | (study == "ROSMAP" & Trait == "AZD_PGS"))
+
+# Diagnosis-specific plot only
+pgs_pheno_eur.long %>% filter((study == "ASDbrain" & Trait == "ASD_PGS") | (study == "LIBD" & Trait == "SCZ_PGS") | (study == "ROSMAP" & Trait == "AZD_PGS")) %>%
+  mutate(MatchDx = match(dx, c("CTL", "ASD", "SCZ", "AZD"))) %>%
+  mutate(dx = fct_reorder(dx, MatchDx)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = PGS, fill = dx)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data=mean.df2, aes(xintercept=mean, colour=dx), linetype="dashed", size=0.5) +
+  facet_wrap( ~ study, ncol = 2) +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw()
+
+ggsave(paste(out_dir, "/pgs_EUR_studyxdx_distribution_pgsdx.svg", sep = ""), height = 4, width = 4)
+ggsave(paste(out_dir, "/pgs_EUR_studyxdx_distribution_pgsdx.png", sep = ""), height = 4, width = 4)
+
+pgs_pheno_eur.long %>% filter((study == "ASDbrain" & Trait == "ASD_PGS") | (study == "LIBD" & Trait == "SCZ_PGS") | (study == "ROSMAP" & Trait == "AZD_PGS")) %>%
+  mutate(MatchDx = match(dx, c("CTL", "ASD", "SCZ", "AZD"))) %>%
+  mutate(dx = fct_reorder(dx, MatchDx)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = PGS, fill = dx)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data=mean.df2, aes(xintercept=mean, colour=dx), linetype="dashed", size=0.5) +
+  facet_wrap( ~ study, nrow = 1) +
+  scale_fill_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous"), name = "") +
+  theme_bw() + theme(legend.position = "bottom")
+
+ggsave(paste(out_dir, "/pgs_EUR_studyxdx_distribution_pgsdx_1row.svg", sep = ""), height = 3, width = 10)
+ggsave(paste(out_dir, "/pgs_EUR_studyxdx_distribution_pgsdx_1row.png", sep = ""), height = 3, width = 10)
+
+```
+
+# PGS-trait associations
+
+## Check PGS within-study
+
+**For target trait**
+
+```{r}
+
+summary(lm(ASD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(SCZ_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(AZD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+```
+
+**Height as a negative control**
+
+```{r}
+
+summary(lm(Height_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(Height_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(Height_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+```
+
+**Other neuropsych traits**
+
+```{r}
+
+summary(lm(MDD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(MDD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(MDD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+summary(lm(EduYears_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(EduYears_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(EduYears_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+```
+
+**For target trait + genoPC covariates**
+
+```{r}
+
+summary(lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+```
+
+**Height as a negative control + covariates**
+
+```{r}
+
+summary(lm(Height_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(Height_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(Height_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+```
+
+**Check other trait-PGS combinations**
+
+```{r}
+
+summary(lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+summary(lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+```
+
+
+**Other neuropsych traits**
+
+```{r}
+
+summary(lm(MDD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(MDD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(MDD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+summary(lm(EduYears_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")))
+summary(lm(EduYears_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")))
+summary(lm(EduYears_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))
+
+```
+
+## Check PGS as a mega-analysis
+
+```{r}
+
+summary(lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur))
+summary(lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur))
+summary(lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur))
+
+```
+
+### Plot of effect sizes
+
+**Should I exclude the asd_exclude group, which are excluded for CTP balance purposes? Or fine for PGS purposes?**
+
+**No covariates**
+
+```{r}
+
+# No covariates
+tidy_df_nocov_asd_asdbrain <- parameters::model_parameters(model = lm(ASD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "ASD_PGS")
+tidy_df_nocov_asd_libd <- parameters::model_parameters(model = lm(ASD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "ASD_PGS")
+tidy_df_nocov_asd_rosmap <- parameters::model_parameters(model = lm(ASD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "ASD_PGS")
+tidy_df_nocov_asd <- rbind(tidy_df_nocov_asd_asdbrain, tidy_df_nocov_asd_libd, tidy_df_nocov_asd_rosmap)
+
+tidy_df_nocov_scz_asdbrain <- parameters::model_parameters(model = lm(SCZ_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "SCZ_PGS")
+tidy_df_nocov_scz_libd <- parameters::model_parameters(model = lm(SCZ_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "SCZ_PGS")
+tidy_df_nocov_scz_rosmap <- parameters::model_parameters(model = lm(SCZ_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "SCZ_PGS")
+tidy_df_nocov_scz <- rbind(tidy_df_nocov_scz_asdbrain, tidy_df_nocov_scz_libd, tidy_df_nocov_scz_rosmap)
+
+tidy_df_nocov_azd_asdbrain <- parameters::model_parameters(model = lm(AZD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "AZD_PGS")
+tidy_df_nocov_azd_libd <- parameters::model_parameters(model = lm(AZD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "AZD_PGS")
+tidy_df_nocov_azd_rosmap <- parameters::model_parameters(model = lm(AZD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "AZD_PGS")
+tidy_df_nocov_azd <- rbind(tidy_df_nocov_azd_asdbrain, tidy_df_nocov_azd_libd, tidy_df_nocov_azd_rosmap)
+
+tidy_df_nocov_height_asdbrain <- parameters::model_parameters(model = lm(Height_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "Height_PGS")
+tidy_df_nocov_height_libd <- parameters::model_parameters(model = lm(Height_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "Height_PGS")
+tidy_df_nocov_height_rosmap <- parameters::model_parameters(model = lm(Height_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "Height_PGS")
+tidy_df_nocov_height <- rbind(tidy_df_nocov_height_asdbrain, tidy_df_nocov_height_libd, tidy_df_nocov_height_rosmap)
+
+tidy_df_nocov_mdd_asdbrain <- parameters::model_parameters(model = lm(MDD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "MDD_PGS")
+tidy_df_nocov_mdd_libd <- parameters::model_parameters(model = lm(MDD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "MDD_PGS")
+tidy_df_nocov_mdd_rosmap <- parameters::model_parameters(model = lm(MDD_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "MDD_PGS")
+tidy_df_nocov_mdd <- rbind(tidy_df_nocov_mdd_asdbrain, tidy_df_nocov_mdd_libd, tidy_df_nocov_mdd_rosmap)
+
+
+tidy_df_nocov_eduyears_asdbrain <- parameters::model_parameters(model = lm(EduYears_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "EduYears_PGS")
+tidy_df_nocov_eduyears_libd <- parameters::model_parameters(model = lm(EduYears_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "EduYears_PGS")
+tidy_df_nocov_eduyears_rosmap <- parameters::model_parameters(model = lm(EduYears_PGS ~ dx, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "EduYears_PGS")
+tidy_df_nocov_eduyears <- rbind(tidy_df_nocov_eduyears_asdbrain, tidy_df_nocov_eduyears_libd, tidy_df_nocov_eduyears_rosmap)
+
+# rbind together
+tidy_df_nocov_mega <- rbind(tidy_df_nocov_asd, tidy_df_nocov_scz, tidy_df_nocov_azd, tidy_df_nocov_height, tidy_df_nocov_mdd, tidy_df_nocov_eduyears) %>% filter(term != "(Intercept)")
+
+# Add label
+tidy_df_nocov_mega$lab <- ifelse(tidy_df_nocov_mega$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_nocov_mega$estimate) < 0.01, formatC(tidy_df_nocov_mega$estimate, format = "e", digits = 1), round(tidy_df_nocov_mega$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_nocov_mega$p.value < 0.01, formatC(tidy_df_nocov_mega$p.value, format = "e", digits = 1), round(tidy_df_nocov_mega$p.value, 2)), ", ", 
+  "df=", tidy_df_nocov_mega$df.error, sep = ""), NA)
+
+# Plot
+tidy_df_nocov_mega %>%
+  mutate(MatchTerm = match(term, c("dxASD", "dxSCZ", "dxAZD"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS", "Height_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = fct_rev(term), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4,1)], name = "") +
+    xlab("diagnosis") +
+    ylab("estimate") +
+    coord_flip() +
+    theme_bw() + theme(legend.position = "none") +
+    facet_wrap(~ Trait, ncol = 3)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_nocov.svg", sep = ""), height = 3, width = 7)
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_nocov.png", sep = ""), height = 3, width = 7)
+
+```
+
+**Covariates**
+
+```{r}
+
+# Covariates
+#tidy_df_cov_asd <- parameters::model_parameters(model = lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "ASD_PGS")
+#tidy_df_cov_scz <- parameters::model_parameters(model = lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "SCZ_PGS")
+#tidy_df_cov_azd <- parameters::model_parameters(model = lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "AZD_PGS")
+#tidy_df_cov_height <- parameters::model_parameters(model = lm(Height_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "Height_PGS")
+
+# Don't fit jointly: do per study
+tidy_df_cov_asd_asdbrain <- parameters::model_parameters(model = lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "ASD_PGS")
+tidy_df_cov_scz_asdbrain <- parameters::model_parameters(model = lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "SCZ_PGS")
+tidy_df_cov_azd_asdbrain <- parameters::model_parameters(model = lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain") %>% filter(!IID %in% asd_exclude$IID)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "AZD_PGS")
+tidy_df_cov_asd <- rbind(tidy_df_cov_asd_asdbrain, tidy_df_cov_scz_asdbrain, tidy_df_cov_azd_asdbrain)
+
+tidy_df_cov_asd_libd <- parameters::model_parameters(model = lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude$IID)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "ASD_PGS")
+tidy_df_cov_scz_libd <- parameters::model_parameters(model = lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude$IID)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "SCZ_PGS")
+tidy_df_cov_azd_libd <- parameters::model_parameters(model = lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD") %>% filter(!IID %in% scz_exclude$IID)), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "AZD_PGS")
+tidy_df_cov_scz <- rbind(tidy_df_cov_asd_libd, tidy_df_cov_scz_libd, tidy_df_cov_azd_libd)
+
+tidy_df_cov_asd_rosmap <- parameters::model_parameters(model = lm(ASD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "ASD_PGS")
+tidy_df_cov_scz_rosmap <- parameters::model_parameters(model = lm(SCZ_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "SCZ_PGS")
+tidy_df_cov_azd_rosmap <- parameters::model_parameters(model = lm(AZD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "AZD_PGS")
+tidy_df_cov_azd <- rbind(tidy_df_cov_asd_rosmap, tidy_df_cov_scz_rosmap, tidy_df_cov_azd_rosmap)
+
+tidy_df_cov_asd_height  <- parameters::model_parameters(model = lm(Height_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "Height_PGS")
+tidy_df_cov_scz_height <- parameters::model_parameters(model = lm(Height_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "Height_PGS")
+tidy_df_cov_azd_height <- parameters::model_parameters(model = lm(Height_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "Height_PGS")
+tidy_df_cov_height <- rbind(tidy_df_cov_asd_height, tidy_df_cov_scz_height, tidy_df_cov_azd_height)
+
+tidy_df_cov_asd_mdd  <- parameters::model_parameters(model = lm(MDD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "MDD_PGS")
+tidy_df_cov_scz_mdd <- parameters::model_parameters(model = lm(MDD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "MDD_PGS")
+tidy_df_cov_azd_mdd <- parameters::model_parameters(model = lm(MDD_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "MDD_PGS")
+tidy_df_cov_mdd <- rbind(tidy_df_cov_asd_mdd, tidy_df_cov_scz_mdd, tidy_df_cov_azd_mdd)
+
+tidy_df_cov_asd_eduyears  <- parameters::model_parameters(model = lm(EduYears_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ASDbrain")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "EduYears_PGS")
+tidy_df_cov_scz_eduyears <- parameters::model_parameters(model = lm(EduYears_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "LIBD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "EduYears_PGS")
+tidy_df_cov_azd_eduyears <- parameters::model_parameters(model = lm(EduYears_PGS ~ dx + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(Trait = "EduYears_PGS")
+tidy_df_cov_eduyears <- rbind(tidy_df_cov_asd_eduyears, tidy_df_cov_scz_eduyears, tidy_df_cov_azd_eduyears)
+
+# rbind together
+tidy_df_cov_mega <- rbind(tidy_df_cov_asd, tidy_df_cov_scz, tidy_df_cov_azd, tidy_df_cov_height, tidy_df_cov_mdd, tidy_df_cov_eduyears) %>% filter(term %in% c("dxASD", "dxSCZ", "dxAZD"))
+
+# Add label
+tidy_df_cov_mega$lab <- ifelse(tidy_df_cov_mega$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_mega$estimate < 0.01), formatC(tidy_df_cov_mega$estimate, format = "e", digits = 1), round(tidy_df_cov_mega$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_mega$p.value < 0.01, formatC(tidy_df_cov_mega$p.value, format = "e", digits = 1), round(tidy_df_cov_mega$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_mega$df.error, sep = ""), NA)
+
+# Plot
+tidy_df_cov_mega %>%
+  mutate(diagnosis = "diagnosis") %>%
+  mutate(MatchTerm = match(term, c("dxASD", "dxSCZ", "dxAZD"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS", "Height_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = fct_rev(term), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "") +
+    xlab("diagnosis") +
+    ylab("estimate (adjusting for geno PC1-3)") +
+    coord_flip() +
+    theme_bw() + theme(legend.position = "none") +
+    facet_grid(Trait ~ diagnosis)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_1col.svg", sep = ""), height = 10, width = 3)
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_1col.png", sep = ""), height = 10, width = 3)
+
+tidy_df_cov_mega %>%
+  mutate(diagnosis = "diagnosis") %>%
+  mutate(MatchTerm = match(term, c("dxASD", "dxSCZ", "dxAZD"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS", "Height_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = fct_rev(term), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "") +
+    xlab("diagnosis") +
+    ylab("estimate (adjusting for geno PC1-3)") +
+    coord_flip() +
+    theme_bw() + theme(legend.position = "none") +
+    facet_wrap(~ Trait, nrow = 2)
+#    facet_grid(Trait ~ diagnosis)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_2row.svg", sep = ""), height = 6, width = 6)
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_2row.png", sep = ""), height = 6, width = 6)
+
+# Plot
+tidy_df_cov_mega %>%
+  mutate(diagnosis = "diagnosis") %>%
+  mutate(MatchTerm = match(term, c("dxASD", "dxSCZ", "dxAZD"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS", "Height_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = fct_rev(term), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "") +
+    xlab("diagnosis") +
+    ylab("estimate (adjusting for geno PC1-3)") +
+    coord_flip() +
+    theme_bw() + theme(legend.position = "none") +
+    facet_wrap(~ Trait, nrow = 1)
+#    facet_grid(Trait ~ diagnosis)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_1row.svg", sep = ""), height = 3, width = 10)
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_1row.png", sep = ""), height = 3, width = 10)
+
+# Plot
+tidy_df_cov_mega %>% filter(Trait %in% c("ASD_PGS", "SCZ_PGS", "AZD_PGS")) %>%
+  mutate(diagnosis = "diagnosis") %>%
+  mutate(MatchTerm = match(term, c("dxASD", "dxSCZ", "dxAZD"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  ggplot(aes(x = fct_rev(term), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(4, name = "Zissou1", type = "continuous")[c(2,3,4)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("diagnosis") +
+    ylab("estimate (adjusting for geno PC1-3)") +
+    coord_flip() +
+    facet_grid(Trait ~ diagnosis)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_asd_scz_azd.svg", sep = ""), height = 7, width = 3)
+ggsave(paste(out_dir, "/pgs_EUR_lmdx_cov_asd_scz_azd.png", sep = ""), height = 7, width = 3)
+
+```
+
+# CTP-PGS associations
+
+```{r}
+
+#ctpn <- c("Exc", "Inh", "NonN_Astro_FGF3R", "NonN_Micro.Endo_TYROBP", "NonN_Oligo_MBP")
+ctpn <- c("Exc", "Inh", "Astro", "Endo", "Micro", "Oligo", "OPC")
+
+pgs_pheno_ctp_eur.long <- melt(pgs_pheno_eur.long, measure.vars = all_of(ctpn), variable.name = "celltype", value.name = "CTP")
+
+```
+
+## Linear models
+
+### No covariates
+
+```{r}
+
+tidy_df_nocov_asd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ ASD_PGS, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")
+
+tidy_df_nocov_scz <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ SCZ_PGS, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")
+
+tidy_df_nocov_azd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ AZD_PGS, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")
+
+tidy_df_nocov_mdd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ MDD_PGS, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")
+
+tidy_df_nocov_eduyears <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ EduYears_PGS, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom")
+
+# rbind together
+tidy_df_nocov_mega <- rbind(tidy_df_nocov_asd, tidy_df_nocov_scz, tidy_df_nocov_azd, tidy_df_nocov_mdd, tidy_df_nocov_eduyears) %>% filter(term %in% c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS")) %>% mutate(celltype = response)
+
+# Add label
+tidy_df_nocov_mega$lab <- ifelse(tidy_df_nocov_mega$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_nocov_mega$estimate < 0.01), formatC(tidy_df_nocov_mega$estimate, format = "e", digits = 1), round(tidy_df_nocov_mega$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_nocov_mega$p.value < 0.01, formatC(tidy_df_nocov_mega$p.value, format = "e", digits = 1), round(tidy_df_nocov_mega$p.value, 2)), ", ", 
+  "df=", tidy_df_nocov_mega$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_nocov_mega$celltype <- tidy_df_nocov_mega$response
+
+# Plot
+tidy_df_nocov_mega %>%
+  mutate(MatchTerm = match(term, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchCell = match(celltype, all_of(ctpn))) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, no covariates)") +
+    coord_flip() +
+    facet_wrap(~ term)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_nocov.svg", sep = ""), height = 7, width = 7)
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_nocov.png", sep = ""), height = 7, width = 7)
+
+```
+
+### Covariates: age, sex, batch, genoPC1-3 (no dx, ALL participants)
+
+```{r}
+
+tidy_df_cov_asd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ ASD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASD_PGS")
+
+tidy_df_cov_scz <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ SCZ_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "SCZ_PGS")
+
+tidy_df_cov_azd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ AZD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "AZD_PGS")
+
+tidy_df_cov_mdd <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ MDD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "MDD_PGS")
+
+tidy_df_cov_eduyears <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ EduYears_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "EduYears_PGS")
+
+# rbind together
+tidy_df_cov_mega_all <- rbind(tidy_df_cov_asd, tidy_df_cov_scz, tidy_df_cov_azd, tidy_df_cov_mdd, tidy_df_cov_eduyears)
+datatable(tidy_df_cov_mega_all)
+tidy_df_cov_mega <- tidy_df_cov_mega_all %>% filter(term %in% c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS")) %>% mutate(celltype = response)
+
+# Add label
+tidy_df_cov_mega$lab <- ifelse(tidy_df_cov_mega$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_mega$estimate < 0.01), formatC(tidy_df_cov_mega$estimate, format = "e", digits = 1), round(tidy_df_cov_mega$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_mega$p.value < 0.01, formatC(tidy_df_cov_mega$p.value, format = "e", digits = 1), round(tidy_df_cov_mega$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_mega$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_mega$celltype <- tidy_df_cov_mega$response
+
+# Plot
+tidy_df_cov_mega %>%
+  mutate(MatchTerm = match(term, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchCell = match(celltype, all_of(ctpn))) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates)") +
+    coord_flip() +
+    facet_wrap(~ term)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_cov.svg", sep = ""), height = 7, width = 7)
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_cov.png", sep = ""), height = 7, width = 7)
+
+```
+
+### Covariates: age, sex, batch, genoPC1-3, CTL only
+
+```{r}
+
+tidy_df_cov_asd_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ ASD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASD_PGS")
+
+tidy_df_cov_scz_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ SCZ_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "SCZ_PGS")
+
+tidy_df_cov_azd_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ AZD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "AZD_PGS")
+
+tidy_df_cov_mdd_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ MDD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "MDD_PGS")
+
+tidy_df_cov_eduyears_CTL <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ EduYears_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "CTL")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "EduYears_PGS")
+
+# rbind together
+tidy_df_cov_mega_CTL_all <- rbind(tidy_df_cov_asd_CTL, tidy_df_cov_scz_CTL, tidy_df_cov_azd_CTL, tidy_df_cov_mdd_CTL, tidy_df_cov_eduyears_CTL)
+datatable(tidy_df_cov_mega_CTL_all)
+tidy_df_cov_mega_CTL <- tidy_df_cov_mega_CTL_all %>% filter(term %in% c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS")) %>% mutate(celltype = response)
+
+# Add label
+tidy_df_cov_mega_CTL$lab <- ifelse(tidy_df_cov_mega_CTL$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_mega_CTL$estimate < 0.01), formatC(tidy_df_cov_mega_CTL$estimate, format = "e", digits = 1), round(tidy_df_cov_mega_CTL$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_mega_CTL$p.value < 0.01, formatC(tidy_df_cov_mega_CTL$p.value, format = "e", digits = 1), round(tidy_df_cov_mega_CTL$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_mega_CTL$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_mega_CTL$celltype <- tidy_df_cov_mega_CTL$response
+
+# Plot
+tidy_df_cov_mega_CTL %>%
+  mutate(MatchTerm = match(term, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGs", "EduYears_PGS"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchCell = match(celltype, all_of(ctpn))) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates) from nonDX") +
+    coord_flip() +
+    facet_wrap(~ term)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_cov_CTLonly.svg", sep = ""), height = 7, width = 7)
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_cov_CTLonly.png", sep = ""), height = 7, width = 7)
+
+```
+
+### Covariates: age, sex, batch, genoPC1-3, DX only
+
+```{r}
+
+tidy_df_cov_asd_DX <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ ASD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "ASD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "ASD_PGS")
+
+tidy_df_cov_scz_DX <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ SCZ_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "SCZ")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "SCZ_PGS")
+
+tidy_df_cov_azd_DX <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ AZD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "AZD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "AZD_PGS")
+
+tidy_df_cov_mdd_DX <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ MDD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "AZD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "MDD_PGS")
+
+tidy_df_cov_eduyears_DX <- parameters::model_parameters(model = lm(cbind(Exc, Inh, Astro, Endo, Micro, Oligo, OPC) ~ EduYears_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "AZD")), ci = 0.95, verbose = FALSE) %>% parameters::standardize_names(style = "broom") %>% mutate(study = "EduYears_PGS")
+
+# rbind together
+tidy_df_cov_mega_DX_all <- rbind(tidy_df_cov_asd_DX, tidy_df_cov_scz_DX, tidy_df_cov_azd_DX, tidy_df_cov_mdd_DX, tidy_df_cov_eduyears_DX)
+datatable(tidy_df_cov_mega_DX_all)
+tidy_df_cov_mega_DX <- tidy_df_cov_mega_DX_all %>% filter(term %in% c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS")) %>% mutate(celltype = response)
+
+# Add label
+tidy_df_cov_mega_DX$lab <- ifelse(tidy_df_cov_mega_DX$p.value < 0.05, paste(
+  "b=", ifelse(abs(tidy_df_cov_mega_DX$estimate < 0.01), formatC(tidy_df_cov_mega_DX$estimate, format = "e", digits = 1), round(tidy_df_cov_mega_DX$estimate, 2)), ", ", 
+  "p=", ifelse(tidy_df_cov_mega_DX$p.value < 0.01, formatC(tidy_df_cov_mega_DX$p.value, format = "e", digits = 1), round(tidy_df_cov_mega_DX$p.value, 2)), ", ", 
+  "df=", tidy_df_cov_mega_DX$df.error, sep = ""), NA)
+
+# Change cell-type names
+tidy_df_cov_mega_DX$celltype <- tidy_df_cov_mega_DX$response
+
+# Plot
+tidy_df_cov_mega_DX %>%
+  mutate(MatchTerm = match(term, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"))) %>%
+  mutate(term = fct_reorder(term, MatchTerm)) %>% 
+  mutate(MatchCell = match(celltype, all_of(ctpn))) %>%
+  mutate(celltype = fct_reorder(celltype, MatchCell)) %>% 
+  ggplot(aes(x = fct_rev(celltype), y = estimate, colour = term, label = lab)) +
+    geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+#    geom_pointrange(aes(ymin = maxy, ymax = miny), position = position_jitter()) +
+    geom_hline(aes(yintercept = 0), linetype = "dotted", colour = "navy") +
+    geom_label_repel(size = 3.5, nudge_x = 0.15, force = 8, colour = "black", min.segment.length = 0) +
+    scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+    theme_bw() + theme(legend.position = "none") +
+    xlab("cell-type") +
+    ylab("estimate (clr-transformed, adjusted for covariates) from DX") +
+    coord_flip() +
+    facet_wrap(~ term)
+
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_cov_DXonly.svg", sep = ""), height = 7, width = 7)
+ggsave(paste(out_dir, "/pgs_EUR_lmCTPvPGS_cov_DXonly.png", sep = ""), height = 7, width = 7)
+
+```
+
+### ROSMAP CTL sensitivity analysis for Endo
+
+```{r}
+
+# No covariates
+summary(lm(Endo ~ AZD_PGS, data = pgs_pheno_eur %>% filter(study == "ROSMAP") %>% filter(dx == "CTL")))
+
+# With covariates
+summary(lm(Endo ~ AZD_PGS + age + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(study == "ROSMAP") %>% filter(dx == "CTL")))
+
+```
+
+## ANOVA to follow up significant PGS-CTP associations
+
+```{r}
+
+endo_azd_pgs <- summary(aov(Endo ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + AZD_PGS, data = pgs_pheno_eur %>% filter(dx == "CTL")))[[1]]
+endo_azd_pgs
+
+endo_azd_pgs_batchfirst <- summary(aov(Endo ~ batch + sex + age + age2 + PC1 + PC2 + PC3 + AZD_PGS, data = pgs_pheno_eur %>% filter(dx == "CTL")))[[1]]
+endo_azd_pgs_batchfirst
+
+endo_azd_pgs_ctldx <- summary(aov(Endo ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + dx + dx:AZD_PGS, data = pgs_pheno_eur))[[1]]
+endo_azd_pgs_ctldx
+
+endo_azd_pgs_addROSMAP <- summary(aov(Endo ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + AZD_PGS, data = pgs_pheno_eur %>% filter(dx == "CTL" | study == "ROSMAP")))[[1]]
+endo_azd_pgs_addROSMAP
+
+endo_azd_pgs_onlyROSMAP <- summary(aov(Endo ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + AZD_PGS, data = pgs_pheno_eur %>% filter(study == "ROSMAP")))[[1]]
+endo_azd_pgs_onlyROSMAP
+
+#astro_scz_pgs <- summary(aov(Astro ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + SCZ_PGS, data = pgs_pheno_eur %>% filter(dx == "CTL")))[[1]]
+#astro_scz_pgs
+
+#astro_scz_pgs_ctldx <- summary(aov(Astro ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + dx + dx:SCZ_PGS, data = pgs_pheno_eur))[[1]]
+#astro_scz_pgs_ctldx
+
+oligo_scz_pgs <- summary(aov(Oligo ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + SCZ_PGS, data = pgs_pheno_eur %>% filter(dx == "CTL")))[[1]]
+oligo_scz_pgs
+
+oligo_scz_pgs_ctldx <- summary(aov(Oligo ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + dx + dx:SCZ_PGS, data = pgs_pheno_eur))[[1]]
+oligo_scz_pgs_ctldx
+
+# Check using alternative method
+mod0 <- lm(Endo ~ age + age2 + sex + batch + PC1 + PC2 + PC3, data = pgs_pheno_eur %>% filter(dx == "CTL"))
+mod1 <- lm(Endo ~ age + age2 + sex + batch + PC1 + PC2 + PC3 + AZD_PGS, data = pgs_pheno_eur %>% filter(dx == "CTL"))
+anova(mod0, mod1)
+
+# Summary tables
+endo_azd_pgs_sumsq <- endo_azd_pgs$'Sum Sq'[1:(nrow(endo_azd_pgs)-1)]
+endo_azd_pgs_sumsq <- endo_azd_pgs$'Sum Sq'
+endo_azd_pgs_totalsumsq <- sum(endo_azd_pgs$'Sum Sq')
+endo_azd_pgs_sumsq_summary <- data.frame(variable = rownames(endo_azd_pgs), SumSq = endo_azd_pgs_sumsq, var_pc = endo_azd_pgs_sumsq/endo_azd_pgs_totalsumsq*100, Cumulative = cumsum(endo_azd_pgs_sumsq), p = endo_azd_pgs$'Pr(>F)', CTP_PGS = "Endo/AZD_PGS (CTL)")
+endo_azd_pgs_sumsq_summary
+
+#astro_scz_pgs_sumsq <- astro_scz_pgs$'Sum Sq'[1:(nrow(astro_scz_pgs)-1)]
+#astro_scz_pgs_sumsq <- astro_scz_pgs$'Sum Sq'
+#astro_scz_pgs_totalsumsq <- sum(astro_scz_pgs$'Sum Sq')
+#astro_scz_pgs_sumsq_summary <- data.frame(variable = rownames(astro_scz_pgs), SumSq = astro_scz_pgs_sumsq, var_pc = astro_scz_pgs_sumsq/astro_scz_pgs_totalsumsq*100, Cumulative = cumsum(astro_scz_pgs_sumsq), p = astro_scz_pgs$'Pr(>F)', CTP_PGS = "Astro/SCZ_PGS (CTL)")
+#astro_scz_pgs_sumsq_summary
+
+oligo_scz_pgs_sumsq <- oligo_scz_pgs$'Sum Sq'[1:(nrow(oligo_scz_pgs)-1)]
+oligo_scz_pgs_sumsq <- oligo_scz_pgs$'Sum Sq'
+oligo_scz_pgs_totalsumsq <- sum(oligo_scz_pgs$'Sum Sq')
+oligo_scz_pgs_sumsq_summary <- data.frame(variable = rownames(oligo_scz_pgs), SumSq = oligo_scz_pgs_sumsq, var_pc = oligo_scz_pgs_sumsq/oligo_scz_pgs_totalsumsq*100, Cumulative = cumsum(oligo_scz_pgs_sumsq), p = oligo_scz_pgs$'Pr(>F)', CTP_PGS = "Oligo/SCZ_PGS (CTL)")
+oligo_scz_pgs_sumsq_summary
+
+endo_azd_pgs_addROSMAP_sumsq <- endo_azd_pgs_addROSMAP$'Sum Sq'[1:(nrow(endo_azd_pgs_addROSMAP)-1)]
+endo_azd_pgs_addROSMAP_sumsq <- endo_azd_pgs_addROSMAP$'Sum Sq'
+endo_azd_pgs_addROSMAP_totalsumsq <- sum(endo_azd_pgs_addROSMAP$'Sum Sq')
+endo_azd_pgs_addROSMAP_sumsq_summary <- data.frame(variable = rownames(endo_azd_pgs_addROSMAP), SumSq = endo_azd_pgs_addROSMAP_sumsq, var_pc = endo_azd_pgs_addROSMAP_sumsq/endo_azd_pgs_addROSMAP_totalsumsq*100, Cumulative = cumsum(endo_azd_pgs_addROSMAP_sumsq), p = endo_azd_pgs_addROSMAP$'Pr(>F)', CTP_PGS = "Endo/AZD_PGS (CTL+AZD)")
+endo_azd_pgs_addROSMAP_sumsq_summary
+
+endo_azd_pgs_onlyROSMAP_sumsq <- endo_azd_pgs_onlyROSMAP$'Sum Sq'[1:(nrow(endo_azd_pgs_onlyROSMAP)-1)]
+endo_azd_pgs_onlyROSMAP_sumsq <- endo_azd_pgs_onlyROSMAP$'Sum Sq'
+endo_azd_pgs_onlyROSMAP_totalsumsq <- sum(endo_azd_pgs_onlyROSMAP$'Sum Sq')
+endo_azd_pgs_onlyROSMAP_sumsq_summary <- data.frame(variable = rownames(endo_azd_pgs_onlyROSMAP), SumSq = endo_azd_pgs_onlyROSMAP_sumsq, var_pc = endo_azd_pgs_onlyROSMAP_sumsq/endo_azd_pgs_onlyROSMAP_totalsumsq*100, Cumulative = cumsum(endo_azd_pgs_onlyROSMAP_sumsq), p = endo_azd_pgs_onlyROSMAP$'Pr(>F)', CTP_PGS = "Endo/AZD_PGS (ROSMAP)")
+endo_azd_pgs_onlyROSMAP_sumsq_summary
+
+#ctp_pgs_summary <- rbind(endo_azd_pgs_sumsq_summary, endo_azd_pgs_addROSMAP_sumsq_summary, endo_azd_pgs_onlyROSMAP_sumsq_summary, astro_scz_pgs_sumsq_summary, oligo_scz_pgs_sumsq_summary)
+ctp_pgs_summary <- rbind(endo_azd_pgs_sumsq_summary, endo_azd_pgs_addROSMAP_sumsq_summary, endo_azd_pgs_onlyROSMAP_sumsq_summary, oligo_scz_pgs_sumsq_summary)
+
+ctp_pgs_summary %>% 
+  mutate(variable = gsub("[[:blank:]]", "", variable)) %>%
+  filter(variable != "Residuals") %>%
+  mutate(variable = gsub("SCZ_PGS", "PGS", variable)) %>%
+  mutate(variable = gsub("AZD_PGS", "PGS", variable)) %>%
+  mutate(MatchVariable = match(variable, unique(variable))) %>%
+  mutate(MatchAnalysis = match(CTP_PGS, unique(CTP_PGS))) %>%
+  mutate(variable = fct_reorder(variable, rev(MatchVariable))) %>%
+  mutate(CTP_PGS = fct_reorder(CTP_PGS, rev(MatchAnalysis))) %>%
+  ggplot(aes(x = CTP_PGS, y = var_pc, fill = variable)) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  ylab("Variance % explained of clr-transformed CTP") + xlab("Association tested") +
+  coord_flip()
+
+ggsave(paste(out_dir, "/pgs_EUR_anova_varpc_cov_pgssigassoc.svg", sep = ""), height = 4, width = 7)
+ggsave(paste(out_dir, "/pgs_EUR_anova_varpc_cov_pgssigassoc.png", sep = ""), height = 4, width = 7)
+
+```
+
+## Scatterplots (no cov)
+
+```{r}
+
+pgs_pheno_ctp_eur.long$celltypen <- pgs_pheno_ctp_eur.long$celltype
+
+pgs_pheno_ctp_eur.long %>%
+  filter(Trait != "Height_PGS") %>%
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  mutate(MatchCell = match(celltypen, all_of(ctpn))) %>%
+  mutate(celltypen = fct_reorder(celltypen, MatchCell)) %>% 
+  ggplot(aes(x = PGS, y = CTP)) +
+  geom_point(aes(colour = Trait)) +
+  geom_smooth(method = "lm") +
+  scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+  ylab("CTP (clr-transformed)") +
+  theme_bw() + theme(legend.position = "none") +
+  facet_grid(celltypen ~ Trait, scales = "free")
+
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_nocov_ALL.svg", sep = ""), height = 7, width = 5)
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_nocov_ALL.png", sep = ""), height = 7, width = 5)
+
+```
+
+## Scatterplots (regress out batch effect, ALL participants)
+
+```{r}
+
+batch_coef <- pgs_pheno_ctp_eur.long %>% group_by(celltype) %>% 
+  do(model = tidy(lm(CTP ~ batch, data = .))) %>% unnest(model) %>%
+  mutate(term = gsub("batch", "", term)) %>%
+  dplyr::rename(batch = term) %>%
+  dplyr::select(c("celltype", "batch", "estimate"))
+
+# Modify CTP in light of batch adjustment
+# - subtraction as it's relative to a given batch (eg. coefficient +1, means that batch has +1 unit higher on average --> need to push back down)
+pgs_pheno_ctp_eur.long %>%
+  filter(Trait != "Height_PGS") %>%
+  left_join(., batch_coef, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  mutate(MatchCell = match(celltypen, all_of(ctpn))) %>%
+  mutate(celltypen = fct_reorder(celltypen, MatchCell)) %>% 
+  ggplot(aes(x = PGS, y = CTP_batchadjust)) +
+  geom_point(aes(colour = Trait)) +
+  geom_smooth(method = "lm") +
+  scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+  ylab("CTP (clr-transformed, adjusted for batch)") +
+  theme_bw() + theme(legend.position = "none") +
+  facet_grid(celltypen ~ Trait, scales = "free")
+
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_adjbatch_ALL.svg", sep = ""), height = 7, width = 5)
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_adjbatch_ALL.png", sep = ""), height = 7, width = 5)
+
+```
+
+## Scatterplots (regress out batch effect, CTL participants)
+
+```{r}
+
+batch_coef <- pgs_pheno_ctp_eur.long %>% group_by(celltype) %>% 
+  do(model = tidy(lm(CTP ~ batch, data = .))) %>% unnest(model) %>%
+  mutate(term = gsub("batch", "", term)) %>%
+  dplyr::rename(batch = term) %>%
+  dplyr::select(c("celltype", "batch", "estimate"))
+
+# Modify CTP in light of batch adjustment
+# - subtraction as it's relative to a given batch (eg. coefficient +1, means that batch has +1 unit higher on average --> need to push back down)
+pgs_pheno_ctp_eur.long %>% filter(dx == "CTL") %>%
+  filter(Trait != "Height_PGS") %>%
+  left_join(., batch_coef, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  mutate(MatchCell = match(celltypen, all_of(ctpn))) %>%
+  mutate(celltypen = fct_reorder(celltypen, MatchCell)) %>% 
+  ggplot(aes(x = PGS, y = CTP_batchadjust)) +
+  geom_point(aes(colour = Trait)) +
+  geom_smooth(method = "lm") +
+  scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+  ylab("CTP (clr-transformed, adjusted for batch, CTL only)") +
+  theme_bw() + theme(legend.position = "none") +
+  facet_grid(celltypen ~ Trait, scales = "free")
+
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_adjbatch_CTLonly.svg", sep = ""), height = 7, width = 5)
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_adjbatch_CTLonly.png", sep = ""), height = 7, width = 5)
+
+pgs_pheno_ctp_eur.long %>% filter(dx == "CTL") %>%
+  filter(Trait != "Height_PGS") %>%
+  left_join(., batch_coef, by = c("celltype", "batch")) %>% 
+  mutate(CTP_batchadjust = ifelse(is.na(estimate), CTP, CTP - estimate)) %>% 
+  mutate(MatchTrait = match(Trait, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"))) %>%
+  mutate(Trait = fct_reorder(Trait, MatchTrait)) %>% 
+  mutate(MatchCell = match(celltypen, all_of(ctpn))) %>%
+  mutate(celltypen = fct_reorder(celltypen, MatchCell)) %>% 
+  ggplot(aes(x = PGS, y = CTP_batchadjust)) +
+  geom_point(aes(colour = Trait)) +
+  geom_smooth(method = "lm") +
+  scale_colour_manual(values = wes_palette(7, name = "Zissou1", type = "continuous")[c(3,4,7,6,1)], name = "") +
+  ylab("CTP (clr-transformed, adjusted for batch, CTL only)") +
+  coord_cartesian(ylim=c(-2, 2)) +
+  theme_bw() + theme(legend.position = "none") +
+  facet_grid(celltypen ~ Trait)
+
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_adjbatch_neg2to2_CTLonly.svg", sep = ""), height = 7, width = 5)
+ggsave(paste(out_dir, "/pgs_EUR_scatterCTPvPGS_adjbatch_neg2to2_CTLonly.png", sep = ""), height = 7, width = 5)
+
+```
+
+## All participants
+
+### Correlation
+
+```{r}
+
+pgs_pheno_ctp.cor <- pgs_pheno_ctp_eur.long %>% group_by(Trait, celltype) %>% dplyr::summarise(r_pearson = cor.test(PGS, CTP)$estimate, p = cor.test(PGS, CTP)$p.value)
+
+pgs_pheno_ctp.cor %>% dplyr::select(c("Trait", "celltype", "r_pearson")) %>% spread(Trait, r_pearson)
+
+pgs_pheno_ctp.cor %>% dplyr::select(c("Trait", "celltype", "p")) %>% spread(Trait, p)
+
+```
+
+### Plot
+
+```{r}
+
+#keepn <- c("Exc", "Inh", "NonN_Astro_FGF3R", "NonN_Micro.Endo_TYROBP", "NonN_Oligo_MBP", "ASD_PGS", "SCZ_PGS", "AZD_PGS")
+keepn <- c(ctpn, "ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS")
+
+g <- ggduo(pgs_pheno_eur, ctpn, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"), xlab = "CTPs", ylab = "PGS", title = "Brain CTPs vs Neuropsychiatric PGS")
+
+#ggpairs(pgs_pheno_eur %>% dplyr::select(all_of(keepn)))
+
+```
+
+## CTL only
+
+### Correlation
+
+```{r}
+
+pgs_pheno_ctp_CTL.cor <- pgs_pheno_ctp_eur.long %>% filter(dx == "CTL") %>% group_by(Trait, celltype) %>% dplyr::summarise(r_pearson = cor.test(PGS, CTP)$estimate, p = cor.test(PGS, CTP)$p.value)
+
+pgs_pheno_ctp_CTL.cor %>% dplyr::select(c("Trait", "celltype", "r_pearson")) %>% spread(Trait, r_pearson)
+
+pgs_pheno_ctp_CTL.cor %>% dplyr::select(c("Trait", "celltype", "p")) %>% spread(Trait, p)
+
+```
+
+### Plot
+
+```{r}
+
+#keepn <- c("Exc", "Inh", "NonN_Astro_FGF3R", "NonN_Micro.Endo_TYROBP", "NonN_Oligo_MBP", "ASD_PGS", "SCZ_PGS", "AZD_PGS")
+keepn <- c(ctpn, "ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS")
+
+#ggpairs(pgs_pheno_eur %>% filter(dx == "CTL") %>% dplyr::select(all_of(keepn)))
+g <- ggduo(pgs_pheno_eur %>% filter(dx == "CTL"), ctpn, c("ASD_PGS", "SCZ_PGS", "AZD_PGS", "MDD_PGS", "EduYears_PGS"), xlab = "CTPs", ylab = "PGS", title = "Brain CTPs vs Neuropsychiatric PGS")
+
+```
