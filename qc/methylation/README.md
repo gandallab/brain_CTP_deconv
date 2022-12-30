@@ -35,4 +35,8 @@ meffil outputs .html files with QC results:
 - `normalization_report_Jaffe2018_fetal_platerandom.html.html`: meffil normalisation report demonstrating control of batch effects after quantile normalisation for LIBD samples under 18 years of age
 - `normalization_report_Jaffe2018_age18_platefixed.html.html`: meffil normalisation report demonstrating control of batch effects after quantile normalisation for LIBD samples 18 years or older
 
-Note that there were prominent batch effects after quantile normalisation, and that these were attributable to plate and slide effects (for more detail, see `methylation_unsupervised_eda_Jaffe2018.html` -> Section 1.3 "Plot PCs" which also shows that these effects existed in the original paper)
+## A note on batch effects ...
+
+Note that there were prominent batch effects in the LIBD dataset after quantile normalisation, and that these were attributable to plate and slide effects (for more detail, see `methylation_unsupervised_eda_Jaffe2018.html` -> Section 1.3 "Plot PCs" which also shows that these effects existed in the original paper). 
+
+There were also large batch effects in the ROSMAP dataset (related to thermocycler batch), which we additionally attempted to mitigate using ComBat and SNM. However, these batch correction methods induced negative beta values, which created troubles for CTP deconvolution, which were not easily dealt with ... Therefore, for the purposes of deconvolution, we elected not to use these additional batch correction methods, included batch as a fixed covariate in the analyses, and paid careful attention to its statistical effects in interpreting our results.
