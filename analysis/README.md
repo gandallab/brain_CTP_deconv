@@ -1,6 +1,6 @@
-# README: analysis/ folder
+# README: `analysis/`
 
-## 1_deconvolution_method_comparison/
+## `1_deconvolution_method_comparison/`
 
 These scripts compare various deconvolution methods, informing our final choice of algorithm.
 
@@ -26,10 +26,16 @@ We also experimented with a variety of marker probe identification methods.
 - For the sequencing-based reference data, we also tried a chi-squared method but found the "extremes" method was superior.
 - For the array-based reference data, we also tried the rowFtests method implemented in minfi. The results were extremely similar.
 
-## 2_ctp_differences/
+## `2_ctp_differences/`
 
+Analyses for brain CTP differences associated with diagnosis, age and sex.
 
+Paired .Rmd and .html files for:
 
-## 3_pgs/
+- `ctp_differences`: includes exploratory data anlyses for diagnosis, age and sex differences for the ROSMAP, LIBD and UCLA_ASD datasets, experimenting with covariates, transformations and statistical methods.
+- `ctp_differences_local_plots`: this is really a continuation of above but this contains more of the finalised results of this analyses. 
+- `ctp_differences_replication_BDR`: equivalent analyses in the BDR replication dataset (for Alzheimer's disease)
 
-## 4_gwas/
+## `3_pgs/`
+
+## `4_gwas/`
