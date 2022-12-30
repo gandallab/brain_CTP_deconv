@@ -1,6 +1,7 @@
 # README: brain_CTP deconvolution script
 
-This directory contains scripts used to perform brain_CTP deconvolution as described in Yap et al. 2023
+This directory contains scripts used to perform brain_CTP deconvolution as described in Yap et al. 2023.
+As described in the manuscript, the below deconvolution pipeline was identified to be the best (at least when using the datasets available to us) after extensive testing of other deconvolution methods and marker probe identification methods. RMarkdown documents are provided in [a relative link](README.md)
 
 # Quick start
 
@@ -79,9 +80,9 @@ The relevant script is `estimate_ctp_houseman.R` which includes:
 
 -   requisite functions: 
 	
-	- 	`projectCelType` (performs Houseman 2012 deconvolution implemented in minfi by Aryee et al. 2014 Bioinformatics) 
+	- 	`projectCelType()` (performs Houseman 2012 deconvolution implemented in minfi by Aryee et al. 2014 Bioinformatics) 
 		
-	-	`getErrorPerSample` (indicates quality of deconvolution, see Seiler-Vellame et al. 2022 biorXiv)
+	-	`getErrorPerSample()` (indicates quality of deconvolution, see Seiler-Vellame et al. 2022 biorXiv)
 
 -   load libraries and read in inputs (see **Data**):
 
