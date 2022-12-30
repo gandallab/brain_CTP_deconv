@@ -46,7 +46,7 @@ The below files are listed in order of how they are generated
 
 1.  raw data: available from NCBI GEO/SRA with accession number GSE140493 (Luo et al. 2022 Cell Genomics) [https://www.sciencedirect.com/science/article/pii/S2666979X22000271]
 
-2.  sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for probes with coverage \>=10
+2.  sequencing read counts across methylation sites overlapping with Illumina 450K/EPIC array CpG probes (read counts summed within +/-50bp of the array CpG probe), then filtering for CpG sites with read coverage \>=10
 
 	-   Methylated counts: `ilmn450kepic_aggto100bp_celltype_c10_M.txt`
 
