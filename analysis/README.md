@@ -61,7 +61,7 @@ For the brain CTP phenotypes, we took 2 approaches:
 1. The n=7 brain CTP phenotypes were clr-transformed (to deal with proportionality), with subsequent inverse normal transformation (to induce normality as clr-transformation can create outliers).
 2. Performing compositionally-aware PCA on the raw brain CTPs, and taking these PCs as phenotypes (CTP_PCs). This avoids the need for clr-transformation, but the drawback is that drawing conclusions about brain CTPs requires the reader to map each CTP_PC to its respective PCA loadings. For example, CTP_PC1 below corresponds to low Exc/Inh/Astro proportions and high OPC/Micro proportions.
 
-<img width="227" alt="image" src="https://user-images.githubusercontent.com/19381296/210031331-5935b756-42b5-43b6-8f10-824940d3e67c.png">
+![image](https://user-images.githubusercontent.com/19381296/210123840-9caa2f8c-28cc-4b7a-8b02-318f3978a496.png)
 
 We then meta-analysed the 3 datasets using METAL.
 
