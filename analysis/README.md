@@ -69,5 +69,11 @@ We also performed COJO to identify conditionally independent loci.
 
 Folder contains:
 
-- 
+- `gwas_analysis.sh`: driver script used to perform GWAS [@Daniel: please add? (or whatever script was used to do this]
+- `gwas_linear.sh`: wrapper script to perform a linear model GWAS (using GCTAv1.93.2beta)
+- `metal/`: folder containing per-brain CTP scripts to perform METAL GWAS meta-analysis [@Daniel: please add?]
+- `gwas_cojo.sh`: wrapper script to run COJO on GWAS sumstats
+- `gcta_analysis.Rmd` and `gcta_analysis.html` [@Daniel: please add? this or whatever script you used to generate plots can replace this]
+
+![image](https://user-images.githubusercontent.com/19381296/210123731-d71627ea-6dc3-4094-842c-4d4c2ffd5645.png)
 
