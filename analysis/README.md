@@ -47,9 +47,8 @@ We used SBayesR to generate polygenic scores.
 
 Folder contains paired .Rmd and .html files for:
 
-- `pgs_analysis`: exploratory, finalised, and sensitivity analyses for these analyses.
-
-Scripts for PGS generation are provided in the `qc/` folder.
+- `pgs_analysis`: exploratory, finalised, and sensitivity analyses for these analyses
+- `sbayesr_generate/`: folder containing scripts used to generate PGS using SBayesR ([Lloyd-Jones, Zeng et al. 2019](https://cnsgenomics.com/software/gctb/#Overview))
 
 ![image](https://user-images.githubusercontent.com/19381296/210070771-f1717dde-f01d-4f5b-a409-9668d528c439.png)
 
