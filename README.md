@@ -21,5 +21,5 @@ Chloe X Yap, Daniel D Vo, Matthew Heffel, Arjun Bhattacharya, Cindy Wen, Kathryn
 ## Data 
 
 - Where possible, we've tried to keep data within this GitHub repo 
-- However, for larger files we've used Zenodo, but this is all described in the README within the relevant folders :)
+- However, for larger files we've used Zenodo [10.5281/zenodo.7604233], but this is all described in the README within the relevant folders :)
 
