@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/539309254.svg)](https://zenodo.org/doi/10.5281/zenodo.10624889)
+
 # brain_CTP_deconv
 Deconvolving brain cell-type proportions (brain CTP) from DNA methylation data.
 
